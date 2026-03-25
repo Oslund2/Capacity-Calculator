@@ -63,7 +63,7 @@
         .slide-panel.open{transform:translateX(0)}
     </style>
 </head>
-<body class="h-full bg-slate-100" x-data="app()" x-cloak x-init="loadDemo()">
+<body class="h-full bg-slate-100" x-data="app()" x-cloak x-init="init()">
 
     <div class="flex h-screen overflow-hidden">
         <!-- SIDEBAR -->
@@ -94,10 +94,15 @@
                     </button>
                 </div>
             </nav>
-            <div class="p-4 border-t border-white/10">
+            <div class="p-4 border-t border-white/10 space-y-3">
+                <button @click="toggleMode()" class="w-full flex items-center gap-2 px-3 py-2 rounded-lg text-xs font-medium transition-colors" :class="isDemo ? 'bg-amber-500/20 text-amber-300 hover:bg-amber-500/30' : 'bg-emerald-500/20 text-emerald-300 hover:bg-emerald-500/30'">
+                    <div class="w-2 h-2 rounded-full" :class="isDemo ? 'bg-amber-400' : 'bg-emerald-400'"></div>
+                    <span x-text="isDemo ? 'Demo Mode' : 'Live Mode'"></span>
+                    <span class="ml-auto text-[10px] opacity-60" x-text="isDemo ? 'Switch to Live' : 'Switch to Demo'"></span>
+                </button>
                 <div class="flex items-center gap-3">
-                    <div class="w-8 h-8 bg-indigo-500/30 rounded-full flex items-center justify-center text-indigo-200 text-xs font-bold">S</div>
-                    <div class="flex-1 min-w-0"><div class="text-sm text-white truncate">Scripps Tech</div><div class="text-xs text-gray-400">Demo Mode</div></div>
+                    <div class="w-8 h-8 rounded-full flex items-center justify-center text-xs font-bold" :class="isDemo ? 'bg-amber-500/30 text-amber-200' : 'bg-emerald-500/30 text-emerald-200'" x-text="isDemo ? 'D' : 'S'"></div>
+                    <div class="flex-1 min-w-0"><div class="text-sm text-white truncate" x-text="isDemo ? 'Demo Data' : 'Scripps Networks'"></div><div class="text-xs text-gray-400" x-text="isDemo ? 'Sample data loaded' : 'Supabase connected'"></div></div>
                 </div>
             </div>
         </aside>
@@ -602,6 +607,7 @@ const AI_URL = 'https://bnyokiwcrypidspehhvi.supabase.co/functions/v1/ai-advisor
 function app() {
     return {
         currentView: 'dashboard',
+        isDemo: false, supabase: null,
         showTeamModal: false, showResourceModal: false, showInitiativeModal: false, showScenarioModal: false, showRateModal: false,
         showAiPanel: false,
         teams: [], resources: [], initiatives: [], scenarios: [], augRates: [],
@@ -622,7 +628,37 @@ function app() {
         scenarioForm: {name:'',description:'',base_quarter:'2026-Q2',lead_tax_rate:0.25},
         rateForm: {name:'',region:'offshore',augmentation_type:'contractor',capacity_role:'support',daily_rate_usd:400,ramp_weeks:4},
 
-        loadDemo() {
+        async init() {
+            this.supabase = window.supabase.createClient(window.SUPABASE_URL, window.SUPABASE_ANON_KEY);
+            this.isDemo = false;
+            await this.loadLive();
+        },
+
+        async loadLive() {
+            if (!this.supabase) return;
+            const [t, r, i, s, a] = await Promise.all([
+                this.supabase.from('teams').select('*').eq('is_active', true),
+                this.supabase.from('resources').select('*').eq('is_active', true),
+                this.supabase.from('initiatives').select('*').eq('is_active', true),
+                this.supabase.from('scenarios').select('*'),
+                this.supabase.from('augmentation_rates').select('*').eq('is_active', true),
+            ]);
+            this.teams = t.data || []; this.resources = r.data || [];
+            this.initiatives = i.data || []; this.scenarios = s.data || [];
+            this.augRates = a.data || [];
+            this.selectedTeam = null; this.selectedScenario = null; this.scenarioResults = null;
+        },
+
+        async toggleMode() {
+            this.isDemo = !this.isDemo;
+            this.aiDashboardResult = null; this.aiTeamResult = null; this.aiInitiativeResult = null;
+            this.aiScenarioResult = null; this.aiAugResult = null;
+            this.selectedTeam = null; this.selectedScenario = null; this.scenarioResults = null;
+            if (this.isDemo) { this.loadDemoData(); }
+            else { await this.loadLive(); }
+        },
+
+        loadDemoData() {
             this.teams = [
                 {id:'t1',name:'Platform Engineering',department:'Technology',description:'Core platform and infrastructure'},
                 {id:'t2',name:'Data Solutions',department:'Technology',description:'Data pipelines and analytics'},
@@ -740,21 +776,45 @@ function app() {
             this.$nextTick(()=>{const el=document.getElementById('chatMessages');if(el)el.scrollTop=el.scrollHeight});
         },
 
-        // CRUD
-        saveTeam(){const d={...this.teamForm};if(this.editingTeam)Object.assign(this.editingTeam,d);else this.teams.push({id:'t'+Date.now(),...d});this.showTeamModal=false},
+        // CRUD — all methods handle both live (Supabase) and demo (in-memory) modes
+        async saveTeam(){
+            const d={...this.teamForm};
+            if(this.isDemo){if(this.editingTeam)Object.assign(this.editingTeam,d);else this.teams.push({id:'t'+Date.now(),...d})}
+            else{if(this.editingTeam){await this.supabase.from('teams').update(d).eq('id',this.editingTeam.id)}else{await this.supabase.from('teams').insert(d)}await this.loadLive()}
+            this.showTeamModal=false},
         resetResourceForm(){this.resourceForm={full_name:'',title:'',capacity_role:'support',resource_type:'internal_employee',fte_equivalent:1.0,bau_pct:20,annual_cost_usd:0,is_classification_tentative:false,classification_confidence:0.5}},
         editResource(r){this.editingResource=r;this.resourceForm={...r,bau_pct:r.bau_allocation*100};this.showResourceModal=true},
-        saveResource(){const f=this.resourceForm;const d={team_id:this.selectedTeam.id,full_name:f.full_name,title:f.title,capacity_role:f.capacity_role,resource_type:f.resource_type,fte_equivalent:f.fte_equivalent,bau_allocation:f.bau_pct/100,annual_cost_usd:f.annual_cost_usd,is_classification_tentative:f.is_classification_tentative,classification_confidence:f.is_classification_tentative?f.classification_confidence:null};const avail=d.fte_equivalent*(1-d.bau_allocation);if(this.editingResource)Object.assign(this.editingResource,d,{available_fte:avail});else this.resources.push({id:'r'+Date.now(),...d,available_fte:avail});this.showResourceModal=false;this.editingResource=null},
-        deleteResource(id){this.resources=this.resources.filter(r=>r.id!==id)},
+        async saveResource(){
+            const f=this.resourceForm;const d={team_id:this.selectedTeam.id,full_name:f.full_name,title:f.title,capacity_role:f.capacity_role,resource_type:f.resource_type,fte_equivalent:f.fte_equivalent,bau_allocation:f.bau_pct/100,annual_cost_usd:f.annual_cost_usd,is_classification_tentative:f.is_classification_tentative,classification_confidence:f.is_classification_tentative?f.classification_confidence:null};
+            if(this.isDemo){const avail=d.fte_equivalent*(1-d.bau_allocation);if(this.editingResource)Object.assign(this.editingResource,d,{available_fte:avail});else this.resources.push({id:'r'+Date.now(),...d,available_fte:avail})}
+            else{if(this.editingResource){await this.supabase.from('resources').update(d).eq('id',this.editingResource.id)}else{await this.supabase.from('resources').insert(d)}await this.loadLive()}
+            this.showResourceModal=false;this.editingResource=null},
+        async deleteResource(id){
+            if(this.isDemo){this.resources=this.resources.filter(r=>r.id!==id)}
+            else{await this.supabase.from('resources').update({is_active:false}).eq('id',id);await this.loadLive()}},
         resetInitiativeForm(){this.initiativeForm={name:'',description:'',status:'sequenced',priority:'medium',owning_team_id:'',business_value_score:50,strategic_readiness_score:50,total_lead_fte_required:0.5,total_support_fte_required:1.0,target_start_quarter:'',target_end_quarter:''}},
         editInitiative(i){this.editingInitiative=i;this.initiativeForm={...i};this.showInitiativeModal=true},
-        saveInitiative(){const f=this.initiativeForm;const d={name:f.name,description:f.description,status:f.status,priority:f.priority,owning_team_id:f.owning_team_id||null,business_value_score:f.business_value_score,strategic_readiness_score:f.strategic_readiness_score,total_lead_fte_required:f.total_lead_fte_required,total_support_fte_required:f.total_support_fte_required,target_start_quarter:f.target_start_quarter,target_end_quarter:f.target_end_quarter,composite_score:(f.business_value_score+f.strategic_readiness_score)/2};if(this.editingInitiative)Object.assign(this.editingInitiative,d);else this.initiatives.push({id:'i'+Date.now(),...d});this.showInitiativeModal=false;this.editingInitiative=null},
+        async saveInitiative(){
+            const f=this.initiativeForm;const d={name:f.name,description:f.description,status:f.status,priority:f.priority,owning_team_id:f.owning_team_id||null,business_value_score:f.business_value_score,strategic_readiness_score:f.strategic_readiness_score,total_lead_fte_required:f.total_lead_fte_required,total_support_fte_required:f.total_support_fte_required,target_start_quarter:f.target_start_quarter,target_end_quarter:f.target_end_quarter};
+            if(this.isDemo){d.composite_score=(d.business_value_score+d.strategic_readiness_score)/2;if(this.editingInitiative)Object.assign(this.editingInitiative,d);else this.initiatives.push({id:'i'+Date.now(),...d})}
+            else{if(this.editingInitiative){await this.supabase.from('initiatives').update(d).eq('id',this.editingInitiative.id)}else{await this.supabase.from('initiatives').insert(d)}await this.loadLive()}
+            this.showInitiativeModal=false;this.editingInitiative=null},
         resetScenarioForm(){this.scenarioForm={name:'',description:'',base_quarter:'2026-Q2',lead_tax_rate:0.25}},
-        saveScenario(){const f=this.scenarioForm;this.scenarios.push({id:'s'+Date.now(),name:f.name,description:f.description,base_quarter:f.base_quarter,lead_tax_rate:f.lead_tax_rate,status:'draft',use_optimistic_classification:false});this.showScenarioModal=false},
+        async saveScenario(){
+            const f=this.scenarioForm;const d={name:f.name,description:f.description,base_quarter:f.base_quarter,lead_tax_rate:f.lead_tax_rate,status:'draft'};
+            if(this.isDemo){this.scenarios.push({id:'s'+Date.now(),...d,use_optimistic_classification:false})}
+            else{await this.supabase.from('scenarios').insert(d);await this.loadLive()}
+            this.showScenarioModal=false},
         runScenario(){const s=this.selectedScenario;const ac=this.activeInitiatives.length;const tax=ac*(s.lead_tax_rate||0.25);const net=this.totalLeadFTE-tax;const cov=this.totalLeadDemand>0?net/this.totalLeadDemand:1;const cost=this.resources.reduce((s,r)=>s+(r.annual_cost_usd||0),0);this.scenarioResults={lead_coverage:cov,greenlit:this.initiatives.filter(i=>i.status==='greenlit').length,sequenced:this.initiatives.filter(i=>i.status==='sequenced').length,constrained:this.initiatives.filter(i=>i.status==='constrained').length,deferred:this.initiatives.filter(i=>i.status==='deferred').length,total_cost:cost}},
         resetRateForm(){this.rateForm={name:'',region:'offshore',augmentation_type:'contractor',capacity_role:'support',daily_rate_usd:400,ramp_weeks:4}},
-        saveAugRate(){const f=this.rateForm;this.augRates.push({id:'a'+Date.now(),name:f.name,region:f.region,augmentation_type:f.augmentation_type,capacity_role:f.capacity_role,daily_rate_usd:f.daily_rate_usd,annual_rate_usd:f.daily_rate_usd*260,ramp_weeks:f.ramp_weeks});this.showRateModal=false},
-        deleteAugRate(id){this.augRates=this.augRates.filter(r=>r.id!==id)},
+        async saveAugRate(){
+            const f=this.rateForm;const d={name:f.name,region:f.region,augmentation_type:f.augmentation_type,capacity_role:f.capacity_role,daily_rate_usd:f.daily_rate_usd,ramp_weeks:f.ramp_weeks};
+            if(this.isDemo){this.augRates.push({id:'a'+Date.now(),...d,annual_rate_usd:d.daily_rate_usd*260})}
+            else{await this.supabase.from('augmentation_rates').insert(d);await this.loadLive()}
+            this.showRateModal=false},
+        async deleteAugRate(id){
+            if(this.isDemo){this.augRates=this.augRates.filter(r=>r.id!==id)}
+            else{await this.supabase.from('augmentation_rates').update({is_active:false}).eq('id',id);await this.loadLive()}},
     }
 }
 </script>
