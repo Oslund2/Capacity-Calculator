@@ -31,8 +31,8 @@
         .badge-red{background:#fee2e2;color:#991b1b}.badge-orange{background:#ffedd5;color:#9a3412}
         .badge-blue{background:#dbeafe;color:#1e40af}.badge-purple{background:#ede9fe;color:#5b21b6}
         .data-table{width:100%;font-size:0.875rem}
-        .data-table thead th{text-align:left;font-size:0.75rem;font-weight:600;color:#64748b;text-transform:uppercase;letter-spacing:0.05em;padding-bottom:0.75rem;border-bottom:2px solid #e2e8f0}
-        .data-table tbody td{padding:0.75rem 0.5rem 0.75rem 0;border-bottom:1px solid #f1f5f9}
+        .data-table thead th{text-align:left;font-size:0.75rem;font-weight:600;color:#64748b;text-transform:uppercase;letter-spacing:0.05em;padding:0.5rem 0.75rem 0.75rem 0.75rem;border-bottom:2px solid #e2e8f0;white-space:nowrap}
+        .data-table tbody td{padding:0.75rem;border-bottom:1px solid #f1f5f9;white-space:nowrap}
         .data-table tbody tr:hover{background:#f8fafc}
         .btn{display:inline-flex;align-items:center;gap:0.5rem;padding:0.5rem 1rem;border-radius:0.5rem;font-size:0.875rem;font-weight:500;transition:all 0.15s;cursor:pointer}
         .btn-primary{background:#1a1f36;color:#fff}.btn-primary:hover{background:#2a3148}
@@ -380,7 +380,7 @@
 
                     <div class="card-raised">
                         <table class="data-table">
-                            <thead><tr><th>Initiative</th><th>Status</th><th>Priority</th><th>Team</th><th>Lead FTE</th><th>Support FTE</th><th>Value</th><th>Readiness</th><th>Score</th><th></th></tr></thead>
+                            <thead><tr><th class="min-w-[180px]">Initiative</th><th>Status</th><th>Priority</th><th>Team</th><th>Lead&nbsp;FTE</th><th>Support&nbsp;FTE</th><th>Value</th><th>Readiness</th><th>Score</th><th></th></tr></thead>
                             <tbody>
                                 <template x-for="i in filteredInitiatives" :key="i.id">
                                     <tr>
