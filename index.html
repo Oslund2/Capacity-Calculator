@@ -1,0 +1,874 @@
+<!DOCTYPE html>
+<html lang="en" class="h-full">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>TCIP — Technology Capacity Intelligence Platform</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script defer src="https://cdn.jsdelivr.net/npm/alpinejs@3.x.x/dist/cdn.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+    <script src="supabase-config.js"></script>
+    <script>
+        tailwind.config = {
+            theme: {
+                extend: {
+                    colors: {
+                        navy: { 50: '#f0f1f5', 100: '#d9dce6', 200: '#b3b9cd', 300: '#8d96b4', 400: '#67739b', 500: '#4a5578', 600: '#3a4260', 700: '#2a3148', 800: '#1a1f36', 900: '#0d101b' },
+                        status: { green: '#10b981', amber: '#f59e0b', red: '#ef4444', orange: '#f97316' }
+                    }
+                }
+            }
+        }
+    </script>
+    <style>
+        [x-cloak] { display: none !important; }
+        .sidebar-link { @apply flex items-center gap-3 px-4 py-2.5 rounded-lg text-sm font-medium transition-all duration-150; }
+        .sidebar-link:hover { @apply bg-white/10; }
+        .sidebar-link.active { @apply bg-white/15 text-white; }
+        .stat-card { @apply bg-white rounded-xl border border-gray-200 p-5 shadow-sm; }
+        .badge { @apply inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-semibold; }
+        .badge-green { @apply bg-emerald-100 text-emerald-800; }
+        .badge-amber { @apply bg-amber-100 text-amber-800; }
+        .badge-red { @apply bg-red-100 text-red-800; }
+        .badge-orange { @apply bg-orange-100 text-orange-800; }
+        .badge-blue { @apply bg-blue-100 text-blue-800; }
+        .data-table { @apply w-full text-sm; }
+        .data-table thead th { @apply text-left text-xs font-semibold text-gray-500 uppercase tracking-wider pb-3 border-b border-gray-200; }
+        .data-table tbody td { @apply py-3 border-b border-gray-100; }
+        .data-table tbody tr:hover { @apply bg-gray-50; }
+        .ratio-bar { @apply h-2 rounded-full; transition: width 0.5s ease; }
+        .btn { @apply inline-flex items-center gap-2 px-4 py-2 rounded-lg text-sm font-medium transition-colors; }
+        .btn-primary { @apply bg-navy-800 text-white hover:bg-navy-700; }
+        .btn-secondary { @apply bg-gray-100 text-gray-700 hover:bg-gray-200; }
+        .input { @apply w-full px-3 py-2 border border-gray-300 rounded-lg text-sm focus:ring-2 focus:ring-navy-500 focus:border-navy-500 outline-none; }
+        .select { @apply w-full px-3 py-2 border border-gray-300 rounded-lg text-sm bg-white focus:ring-2 focus:ring-navy-500 outline-none; }
+        .modal-overlay { @apply fixed inset-0 bg-black/50 z-40 flex items-center justify-center; }
+        .modal-content { @apply bg-white rounded-2xl shadow-2xl max-w-2xl w-full mx-4 max-h-[85vh] overflow-y-auto; }
+    </style>
+</head>
+<body class="h-full bg-gray-50" x-data="app()" x-cloak>
+
+    <!-- LOGIN SCREEN -->
+    <template x-if="!user">
+        <div class="min-h-screen flex items-center justify-center bg-navy-800">
+            <div class="bg-white rounded-2xl shadow-2xl p-8 w-full max-w-md">
+                <div class="text-center mb-8">
+                    <div class="inline-flex items-center justify-center w-16 h-16 bg-navy-800 rounded-2xl mb-4">
+                        <svg class="w-8 h-8 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 19v-6a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2a2 2 0 002-2zm0 0V9a2 2 0 012-2h2a2 2 0 012 2v10m-6 0a2 2 0 002 2h2a2 2 0 002-2m0 0V5a2 2 0 012-2h2a2 2 0 012 2v14a2 2 0 01-2 2h-2a2 2 0 01-2-2z"/></svg>
+                    </div>
+                    <h1 class="text-2xl font-bold text-navy-800">TCIP</h1>
+                    <p class="text-gray-500 text-sm mt-1">Technology Capacity Intelligence Platform</p>
+                </div>
+                <div class="space-y-4">
+                    <div>
+                        <label class="block text-sm font-medium text-gray-700 mb-1">Email</label>
+                        <input type="email" x-model="authEmail" class="input" placeholder="you@scripps.com">
+                    </div>
+                    <div>
+                        <label class="block text-sm font-medium text-gray-700 mb-1">Password</label>
+                        <input type="password" x-model="authPassword" class="input" placeholder="Enter password" @keydown.enter="login()">
+                    </div>
+                    <p x-show="authError" class="text-red-600 text-sm" x-text="authError"></p>
+                    <button @click="login()" class="btn btn-primary w-full justify-center py-2.5">Sign In</button>
+                    <button @click="signup()" class="btn btn-secondary w-full justify-center py-2.5">Create Account</button>
+                </div>
+                <div class="mt-6 pt-4 border-t border-gray-100 text-center">
+                    <button @click="loadDemo()" class="text-sm text-navy-600 hover:text-navy-800 font-medium">Launch Demo Mode</button>
+                </div>
+            </div>
+        </div>
+    </template>
+
+    <!-- MAIN APP -->
+    <template x-if="user">
+        <div class="flex h-screen overflow-hidden">
+            <!-- SIDEBAR -->
+            <aside class="w-64 bg-navy-800 text-gray-300 flex flex-col flex-shrink-0">
+                <div class="p-5 flex items-center gap-3">
+                    <div class="w-9 h-9 bg-white/10 rounded-lg flex items-center justify-center">
+                        <svg class="w-5 h-5 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 19v-6a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2a2 2 0 002-2zm0 0V9a2 2 0 012-2h2a2 2 0 012 2v10m-6 0a2 2 0 002 2h2a2 2 0 002-2m0 0V5a2 2 0 012-2h2a2 2 0 012 2v14a2 2 0 01-2 2h-2a2 2 0 01-2-2z"/></svg>
+                    </div>
+                    <div>
+                        <div class="text-white font-bold text-sm">TCIP</div>
+                        <div class="text-xs text-gray-400">Scripps Networks</div>
+                    </div>
+                </div>
+                <nav class="flex-1 px-3 py-4 space-y-1">
+                    <button @click="currentView = 'dashboard'" :class="currentView === 'dashboard' ? 'active text-white' : 'text-gray-400'" class="sidebar-link w-full">
+                        <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 6a2 2 0 012-2h2a2 2 0 012 2v2a2 2 0 01-2 2H6a2 2 0 01-2-2V6zm10 0a2 2 0 012-2h2a2 2 0 012 2v2a2 2 0 01-2 2h-2a2 2 0 01-2-2V6zM4 16a2 2 0 012-2h2a2 2 0 012 2v2a2 2 0 01-2 2H6a2 2 0 01-2-2v-2zm10 0a2 2 0 012-2h2a2 2 0 012 2v2a2 2 0 01-2 2h-2a2 2 0 01-2-2v-2z"/></svg>
+                        Dashboard
+                    </button>
+                    <button @click="currentView = 'teams'" :class="currentView === 'teams' ? 'active text-white' : 'text-gray-400'" class="sidebar-link w-full">
+                        <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M17 20h5v-2a3 3 0 00-5.356-1.857M17 20H7m10 0v-2c0-.656-.126-1.283-.356-1.857M7 20H2v-2a3 3 0 015.356-1.857M7 20v-2c0-.656.126-1.283.356-1.857m0 0a5.002 5.002 0 019.288 0M15 7a3 3 0 11-6 0 3 3 0 016 0z"/></svg>
+                        Teams & Capacity
+                    </button>
+                    <button @click="currentView = 'portfolio'" :class="currentView === 'portfolio' ? 'active text-white' : 'text-gray-400'" class="sidebar-link w-full">
+                        <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 11H5m14 0a2 2 0 012 2v6a2 2 0 01-2 2H5a2 2 0 01-2-2v-6a2 2 0 012-2m14 0V9a2 2 0 00-2-2M5 11V9a2 2 0 012-2m0 0V5a2 2 0 012-2h6a2 2 0 012 2v2M7 7h10"/></svg>
+                        Portfolio
+                    </button>
+                    <button @click="currentView = 'scenarios'" :class="currentView === 'scenarios' ? 'active text-white' : 'text-gray-400'" class="sidebar-link w-full">
+                        <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8 7h12m0 0l-4-4m4 4l-4 4m0 6H4m0 0l4 4m-4-4l4-4"/></svg>
+                        Scenarios
+                    </button>
+                    <button @click="currentView = 'augmentation'" :class="currentView === 'augmentation' ? 'active text-white' : 'text-gray-400'" class="sidebar-link w-full">
+                        <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 8c-1.657 0-3 .895-3 2s1.343 2 3 2 3 .895 3 2-1.343 2-3 2m0-8c1.11 0 2.08.402 2.599 1M12 8V7m0 1v8m0 0v1m0-1c-1.11 0-2.08-.402-2.599-1M21 12a9 9 0 11-18 0 9 9 0 0118 0z"/></svg>
+                        Augmentation
+                    </button>
+                </nav>
+                <div class="p-4 border-t border-white/10">
+                    <div class="flex items-center gap-3">
+                        <div class="w-8 h-8 bg-white/20 rounded-full flex items-center justify-center text-white text-xs font-bold" x-text="(user.email || 'D')[0].toUpperCase()"></div>
+                        <div class="flex-1 min-w-0">
+                            <div class="text-sm text-white truncate" x-text="user.email || 'Demo User'"></div>
+                            <div class="text-xs text-gray-400" x-text="isDemo ? 'Demo Mode' : 'Online'"></div>
+                        </div>
+                        <button @click="logout()" class="text-gray-400 hover:text-white" title="Sign out">
+                            <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M17 16l4-4m0 0l-4-4m4 4H7m6 4v1a3 3 0 01-3 3H6a3 3 0 01-3-3V7a3 3 0 013-3h4a3 3 0 013 3v1"/></svg>
+                        </button>
+                    </div>
+                </div>
+            </aside>
+
+            <!-- MAIN CONTENT -->
+            <main class="flex-1 overflow-y-auto">
+                <div class="p-8">
+                    <!-- DASHBOARD -->
+                    <div x-show="currentView === 'dashboard'" x-transition>
+                        <div class="mb-6">
+                            <h1 class="text-2xl font-bold text-gray-900">Capacity Dashboard</h1>
+                            <p class="text-gray-500 text-sm mt-1">Real-time portfolio health and capacity intelligence</p>
+                        </div>
+
+                        <!-- KPI Cards -->
+                        <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4 mb-8">
+                            <div class="stat-card">
+                                <div class="text-xs font-semibold text-gray-500 uppercase tracking-wider">Lead Coverage Ratio</div>
+                                <div class="mt-2 flex items-end gap-2">
+                                    <span class="text-3xl font-bold" :class="overallCoverage >= 1.0 ? 'text-emerald-600' : overallCoverage >= 0.8 ? 'text-amber-600' : 'text-red-600'" x-text="overallCoverage.toFixed(2)"></span>
+                                    <span class="text-sm mb-1" :class="overallCoverage >= 1.0 ? 'text-emerald-600' : overallCoverage >= 0.8 ? 'text-amber-600' : 'text-red-600'" x-text="overallCoverage >= 1.0 ? 'Sufficient' : overallCoverage >= 0.8 ? 'Constrained' : 'Critical'"></span>
+                                </div>
+                                <div class="mt-2 w-full bg-gray-200 rounded-full h-2">
+                                    <div class="ratio-bar" :class="overallCoverage >= 1.0 ? 'bg-emerald-500' : overallCoverage >= 0.8 ? 'bg-amber-500' : 'bg-red-500'" :style="`width: ${Math.min(overallCoverage * 100, 100)}%`"></div>
+                                </div>
+                            </div>
+                            <div class="stat-card">
+                                <div class="text-xs font-semibold text-gray-500 uppercase tracking-wider">Portfolio Carrying Capacity</div>
+                                <div class="mt-2 flex items-end gap-2">
+                                    <span class="text-3xl font-bold text-navy-800" x-text="carryingCapacity"></span>
+                                    <span class="text-sm text-gray-500 mb-1">initiatives max</span>
+                                </div>
+                                <div class="text-xs text-gray-400 mt-1" x-text="`${activeInitiatives.length} currently active (${Math.round(activeInitiatives.length / Math.max(carryingCapacity,1) * 100)}% utilized)`"></div>
+                            </div>
+                            <div class="stat-card">
+                                <div class="text-xs font-semibold text-gray-500 uppercase tracking-wider">Total Lead FTE</div>
+                                <div class="mt-2 flex items-end gap-2">
+                                    <span class="text-3xl font-bold text-navy-800" x-text="totalLeadFTE.toFixed(1)"></span>
+                                    <span class="text-sm text-gray-500 mb-1">available</span>
+                                </div>
+                                <div class="text-xs text-gray-400 mt-1" x-text="`${totalLeadDemand.toFixed(1)} FTE demanded`"></div>
+                            </div>
+                            <div class="stat-card">
+                                <div class="text-xs font-semibold text-gray-500 uppercase tracking-wider">Total Support FTE</div>
+                                <div class="mt-2 flex items-end gap-2">
+                                    <span class="text-3xl font-bold text-navy-800" x-text="totalSupportFTE.toFixed(1)"></span>
+                                    <span class="text-sm text-gray-500 mb-1">available</span>
+                                </div>
+                                <div class="text-xs text-gray-400 mt-1" x-text="`${totalSupportDemand.toFixed(1)} FTE demanded`"></div>
+                            </div>
+                        </div>
+
+                        <!-- Initiative Status + Team Coverage -->
+                        <div class="grid grid-cols-1 lg:grid-cols-2 gap-6 mb-8">
+                            <!-- Initiative Status Breakdown -->
+                            <div class="stat-card">
+                                <h3 class="text-sm font-semibold text-gray-700 mb-4">Initiative Status Distribution</h3>
+                                <div class="space-y-3">
+                                    <template x-for="s in statusBreakdown" :key="s.status">
+                                        <div class="flex items-center gap-3">
+                                            <div class="w-24 text-xs font-medium capitalize" :class="s.color" x-text="s.status"></div>
+                                            <div class="flex-1 bg-gray-100 rounded-full h-6 relative overflow-hidden">
+                                                <div class="h-full rounded-full transition-all duration-500" :class="s.bg" :style="`width: ${s.count / Math.max(initiatives.length, 1) * 100}%`"></div>
+                                                <span class="absolute inset-0 flex items-center justify-center text-xs font-bold" :class="s.count > 0 ? 'text-white' : 'text-gray-400'" x-text="s.count"></span>
+                                            </div>
+                                        </div>
+                                    </template>
+                                </div>
+                            </div>
+
+                            <!-- Team Coverage -->
+                            <div class="stat-card">
+                                <h3 class="text-sm font-semibold text-gray-700 mb-4">Lead Coverage by Team</h3>
+                                <div class="space-y-3">
+                                    <template x-for="t in teamCoverages" :key="t.name">
+                                        <div>
+                                            <div class="flex justify-between text-xs mb-1">
+                                                <span class="font-medium text-gray-700" x-text="t.name"></span>
+                                                <span :class="t.ratio >= 1.0 ? 'text-emerald-600' : t.ratio >= 0.8 ? 'text-amber-600' : 'text-red-600'" x-text="t.ratio.toFixed(2)"></span>
+                                            </div>
+                                            <div class="w-full bg-gray-100 rounded-full h-2">
+                                                <div class="ratio-bar" :class="t.ratio >= 1.0 ? 'bg-emerald-500' : t.ratio >= 0.8 ? 'bg-amber-500' : 'bg-red-500'" :style="`width: ${Math.min(t.ratio * 100, 100)}%`"></div>
+                                            </div>
+                                        </div>
+                                    </template>
+                                </div>
+                            </div>
+                        </div>
+
+                        <!-- At-Risk Initiatives -->
+                        <div class="stat-card">
+                            <h3 class="text-sm font-semibold text-gray-700 mb-4">High-Value Initiatives at Risk</h3>
+                            <p class="text-xs text-gray-400 mb-3">Initiatives with high value + readiness scores that are constrained or deferred</p>
+                            <table class="data-table">
+                                <thead><tr>
+                                    <th>Initiative</th><th>Status</th><th>Value</th><th>Readiness</th><th>Lead FTE Gap</th><th>Team</th>
+                                </tr></thead>
+                                <tbody>
+                                    <template x-for="i in atRiskInitiatives" :key="i.id">
+                                        <tr>
+                                            <td class="font-medium text-gray-900" x-text="i.name"></td>
+                                            <td><span class="badge" :class="statusBadge(i.status)" x-text="i.status"></span></td>
+                                            <td x-text="i.business_value_score"></td>
+                                            <td x-text="i.strategic_readiness_score"></td>
+                                            <td class="text-red-600 font-medium" x-text="i.lead_gap ? i.lead_gap.toFixed(1) : '—'"></td>
+                                            <td class="text-gray-500" x-text="teamName(i.owning_team_id)"></td>
+                                        </tr>
+                                    </template>
+                                </tbody>
+                            </table>
+                        </div>
+                    </div>
+
+                    <!-- TEAMS & CAPACITY -->
+                    <div x-show="currentView === 'teams'" x-transition>
+                        <div class="flex items-center justify-between mb-6">
+                            <div>
+                                <h1 class="text-2xl font-bold text-gray-900">Teams & Capacity</h1>
+                                <p class="text-gray-500 text-sm mt-1">Manage team rosters and capacity classifications</p>
+                            </div>
+                            <button @click="showTeamModal = true; editingTeam = null; teamForm = {name:'',description:'',department:''}" class="btn btn-primary">+ Add Team</button>
+                        </div>
+
+                        <!-- Team Cards -->
+                        <div class="grid grid-cols-1 lg:grid-cols-2 xl:grid-cols-3 gap-4 mb-8">
+                            <template x-for="team in teams" :key="team.id">
+                                <div class="stat-card cursor-pointer hover:shadow-md transition-shadow" @click="selectTeam(team)">
+                                    <div class="flex justify-between items-start mb-3">
+                                        <div>
+                                            <h3 class="font-semibold text-gray-900" x-text="team.name"></h3>
+                                            <p class="text-xs text-gray-400" x-text="team.department"></p>
+                                        </div>
+                                        <span class="badge" :class="teamCoverageRatio(team.id) >= 1.0 ? 'badge-green' : teamCoverageRatio(team.id) >= 0.8 ? 'badge-amber' : 'badge-red'" x-text="teamCoverageRatio(team.id).toFixed(2)"></span>
+                                    </div>
+                                    <div class="grid grid-cols-3 gap-2 text-center">
+                                        <div class="bg-gray-50 rounded-lg p-2">
+                                            <div class="text-lg font-bold text-navy-800" x-text="teamLeadFTE(team.id).toFixed(1)"></div>
+                                            <div class="text-xs text-gray-500">Lead FTE</div>
+                                        </div>
+                                        <div class="bg-gray-50 rounded-lg p-2">
+                                            <div class="text-lg font-bold text-navy-800" x-text="teamSupportFTE(team.id).toFixed(1)"></div>
+                                            <div class="text-xs text-gray-500">Support FTE</div>
+                                        </div>
+                                        <div class="bg-gray-50 rounded-lg p-2">
+                                            <div class="text-lg font-bold text-navy-800" x-text="teamResources(team.id).length"></div>
+                                            <div class="text-xs text-gray-500">People</div>
+                                        </div>
+                                    </div>
+                                </div>
+                            </template>
+                        </div>
+
+                        <!-- Selected Team Roster -->
+                        <div x-show="selectedTeam" class="stat-card">
+                            <div class="flex items-center justify-between mb-4">
+                                <h3 class="text-lg font-semibold text-gray-900" x-text="selectedTeam?.name + ' — Roster'"></h3>
+                                <button @click="showResourceModal = true; editingResource = null; resetResourceForm()" class="btn btn-primary text-sm">+ Add Resource</button>
+                            </div>
+                            <table class="data-table">
+                                <thead><tr>
+                                    <th>Name</th><th>Role</th><th>Type</th><th>FTE</th><th>BAU %</th><th>Avail FTE</th><th>Cost (Annual)</th><th>Confidence</th><th></th>
+                                </tr></thead>
+                                <tbody>
+                                    <template x-for="r in teamResources(selectedTeam?.id)" :key="r.id">
+                                        <tr>
+                                            <td>
+                                                <span class="font-medium text-gray-900" x-text="r.full_name"></span>
+                                                <span x-show="r.is_classification_tentative" class="ml-1 text-amber-500 text-xs" title="Tentative classification">*</span>
+                                            </td>
+                                            <td><span class="badge" :class="r.capacity_role === 'lead' ? 'badge-blue' : 'badge-amber'" x-text="r.capacity_role"></span></td>
+                                            <td class="text-gray-500 text-xs" x-text="r.resource_type.replace(/_/g,' ')"></td>
+                                            <td x-text="r.fte_equivalent"></td>
+                                            <td x-text="(r.bau_allocation * 100) + '%'"></td>
+                                            <td class="font-semibold" x-text="r.available_fte.toFixed(2)"></td>
+                                            <td class="text-gray-500" x-text="r.annual_cost_usd ? '$' + Number(r.annual_cost_usd).toLocaleString() : '—'"></td>
+                                            <td x-text="r.is_classification_tentative ? (r.classification_confidence * 100) + '%' : '—'"></td>
+                                            <td class="text-right">
+                                                <button @click="editResource(r)" class="text-navy-600 hover:text-navy-800 text-xs font-medium">Edit</button>
+                                                <button @click="deleteResource(r.id)" class="text-red-500 hover:text-red-700 text-xs font-medium ml-2">Del</button>
+                                            </td>
+                                        </tr>
+                                    </template>
+                                </tbody>
+                            </table>
+                        </div>
+                    </div>
+
+                    <!-- PORTFOLIO -->
+                    <div x-show="currentView === 'portfolio'" x-transition>
+                        <div class="flex items-center justify-between mb-6">
+                            <div>
+                                <h1 class="text-2xl font-bold text-gray-900">Portfolio</h1>
+                                <p class="text-gray-500 text-sm mt-1">Initiative inventory, feasibility, and dependencies</p>
+                            </div>
+                            <div class="flex gap-2">
+                                <select x-model="portfolioFilter" class="select w-40">
+                                    <option value="all">All Statuses</option>
+                                    <option value="greenlit">Greenlit</option>
+                                    <option value="sequenced">Sequenced</option>
+                                    <option value="constrained">Constrained</option>
+                                    <option value="deferred">Deferred</option>
+                                </select>
+                                <button @click="showInitiativeModal = true; editingInitiative = null; resetInitiativeForm()" class="btn btn-primary">+ Add Initiative</button>
+                            </div>
+                        </div>
+                        <div class="stat-card">
+                            <table class="data-table">
+                                <thead><tr>
+                                    <th>Initiative</th><th>Status</th><th>Priority</th><th>Team</th><th>Lead FTE</th><th>Support FTE</th><th>Value</th><th>Readiness</th><th>Composite</th><th></th>
+                                </tr></thead>
+                                <tbody>
+                                    <template x-for="i in filteredInitiatives" :key="i.id">
+                                        <tr>
+                                            <td>
+                                                <div class="font-medium text-gray-900" x-text="i.name"></div>
+                                                <div class="text-xs text-gray-400" x-text="i.target_start_quarter ? i.target_start_quarter + ' — ' + (i.target_end_quarter || '?') : ''"></div>
+                                            </td>
+                                            <td><span class="badge" :class="statusBadge(i.status)" x-text="i.status"></span></td>
+                                            <td><span class="text-xs font-medium capitalize" x-text="i.priority"></span></td>
+                                            <td class="text-gray-500 text-xs" x-text="teamName(i.owning_team_id)"></td>
+                                            <td x-text="i.total_lead_fte_required || '—'"></td>
+                                            <td x-text="i.total_support_fte_required || '—'"></td>
+                                            <td><span class="font-medium" x-text="i.business_value_score || '—'"></span></td>
+                                            <td x-text="i.strategic_readiness_score || '—'"></td>
+                                            <td class="font-semibold" x-text="i.composite_score ? i.composite_score.toFixed(0) : '—'"></td>
+                                            <td class="text-right">
+                                                <button @click="editInitiative(i)" class="text-navy-600 hover:text-navy-800 text-xs font-medium">Edit</button>
+                                            </td>
+                                        </tr>
+                                    </template>
+                                </tbody>
+                            </table>
+                        </div>
+                    </div>
+
+                    <!-- SCENARIOS -->
+                    <div x-show="currentView === 'scenarios'" x-transition>
+                        <div class="flex items-center justify-between mb-6">
+                            <div>
+                                <h1 class="text-2xl font-bold text-gray-900">Scenario Engine</h1>
+                                <p class="text-gray-500 text-sm mt-1">Model what-if scenarios and compare portfolio outcomes</p>
+                            </div>
+                            <button @click="showScenarioModal = true; resetScenarioForm()" class="btn btn-primary">+ New Scenario</button>
+                        </div>
+
+                        <!-- Scenario List -->
+                        <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4 mb-8">
+                            <template x-for="s in scenarios" :key="s.id">
+                                <div class="stat-card cursor-pointer hover:shadow-md transition-shadow" @click="selectScenario(s)">
+                                    <div class="flex justify-between items-start mb-2">
+                                        <h3 class="font-semibold text-gray-900" x-text="s.name"></h3>
+                                        <span class="badge" :class="s.status === 'active' ? 'badge-green' : s.status === 'draft' ? 'badge-amber' : 'badge-blue'" x-text="s.status"></span>
+                                    </div>
+                                    <p class="text-xs text-gray-500 mb-3" x-text="s.description || 'No description'"></p>
+                                    <div class="grid grid-cols-2 gap-2 text-xs">
+                                        <div class="bg-gray-50 rounded p-2 text-center">
+                                            <div class="font-bold text-navy-800" x-text="s.lead_tax_rate"></div>
+                                            <div class="text-gray-400">Lead Tax</div>
+                                        </div>
+                                        <div class="bg-gray-50 rounded p-2 text-center">
+                                            <div class="font-bold text-navy-800" x-text="s.base_quarter || 'Current'"></div>
+                                            <div class="text-gray-400">Base Quarter</div>
+                                        </div>
+                                    </div>
+                                </div>
+                            </template>
+                        </div>
+
+                        <!-- Selected Scenario Detail -->
+                        <div x-show="selectedScenario" class="stat-card">
+                            <div class="flex items-center justify-between mb-4">
+                                <h3 class="text-lg font-semibold text-gray-900" x-text="selectedScenario?.name"></h3>
+                                <div class="flex gap-2">
+                                    <button @click="runScenario()" class="btn btn-primary text-sm">Run Analysis</button>
+                                </div>
+                            </div>
+                            <div x-show="scenarioResults" class="grid grid-cols-2 lg:grid-cols-4 gap-4">
+                                <div class="bg-gray-50 rounded-lg p-4 text-center">
+                                    <div class="text-2xl font-bold" :class="scenarioResults?.lead_coverage >= 1.0 ? 'text-emerald-600' : scenarioResults?.lead_coverage >= 0.8 ? 'text-amber-600' : 'text-red-600'" x-text="scenarioResults?.lead_coverage?.toFixed(2) || '—'"></div>
+                                    <div class="text-xs text-gray-500 mt-1">Lead Coverage</div>
+                                </div>
+                                <div class="bg-gray-50 rounded-lg p-4 text-center">
+                                    <div class="text-2xl font-bold text-navy-800" x-text="scenarioResults?.greenlit || 0"></div>
+                                    <div class="text-xs text-gray-500 mt-1">Greenlit</div>
+                                </div>
+                                <div class="bg-gray-50 rounded-lg p-4 text-center">
+                                    <div class="text-2xl font-bold text-amber-600" x-text="scenarioResults?.sequenced || 0"></div>
+                                    <div class="text-xs text-gray-500 mt-1">Sequenced</div>
+                                </div>
+                                <div class="bg-gray-50 rounded-lg p-4 text-center">
+                                    <div class="text-2xl font-bold text-red-600" x-text="'$' + ((scenarioResults?.total_cost || 0) / 1000000).toFixed(1) + 'M'"></div>
+                                    <div class="text-xs text-gray-500 mt-1">Total Cost</div>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- AUGMENTATION -->
+                    <div x-show="currentView === 'augmentation'" x-transition>
+                        <div class="flex items-center justify-between mb-6">
+                            <div>
+                                <h1 class="text-2xl font-bold text-gray-900">Resource Augmentation Planner</h1>
+                                <p class="text-gray-500 text-sm mt-1">Model cost and capacity impact of staffing changes</p>
+                            </div>
+                            <button @click="showRateModal = true; resetRateForm()" class="btn btn-primary">+ Add Rate</button>
+                        </div>
+                        <div class="stat-card">
+                            <h3 class="text-sm font-semibold text-gray-700 mb-4">Augmentation Rate Catalog</h3>
+                            <table class="data-table">
+                                <thead><tr>
+                                    <th>Name</th><th>Region</th><th>Type</th><th>Capacity Role</th><th>Daily Rate</th><th>Annual Rate</th><th>Ramp (wks)</th><th></th>
+                                </tr></thead>
+                                <tbody>
+                                    <template x-for="r in augRates" :key="r.id">
+                                        <tr>
+                                            <td class="font-medium text-gray-900" x-text="r.name"></td>
+                                            <td class="capitalize" x-text="r.region"></td>
+                                            <td class="text-xs capitalize" x-text="r.augmentation_type.replace(/_/g,' ')"></td>
+                                            <td><span class="badge" :class="r.capacity_role === 'lead' ? 'badge-blue' : 'badge-amber'" x-text="r.capacity_role"></span></td>
+                                            <td x-text="'$' + Number(r.daily_rate_usd).toLocaleString()"></td>
+                                            <td x-text="'$' + Number(r.annual_rate_usd).toLocaleString()"></td>
+                                            <td x-text="r.ramp_weeks"></td>
+                                            <td class="text-right">
+                                                <button @click="deleteAugRate(r.id)" class="text-red-500 hover:text-red-700 text-xs">Del</button>
+                                            </td>
+                                        </tr>
+                                    </template>
+                                </tbody>
+                            </table>
+                        </div>
+                    </div>
+
+                </div>
+            </main>
+        </div>
+    </template>
+
+    <!-- TEAM MODAL -->
+    <div x-show="showTeamModal" class="modal-overlay" @click.self="showTeamModal = false" x-transition>
+        <div class="modal-content p-6">
+            <h2 class="text-lg font-bold mb-4" x-text="editingTeam ? 'Edit Team' : 'Add Team'"></h2>
+            <div class="space-y-4">
+                <div><label class="block text-sm font-medium text-gray-700 mb-1">Team Name</label><input x-model="teamForm.name" class="input"></div>
+                <div><label class="block text-sm font-medium text-gray-700 mb-1">Department</label><input x-model="teamForm.department" class="input"></div>
+                <div><label class="block text-sm font-medium text-gray-700 mb-1">Description</label><textarea x-model="teamForm.description" class="input" rows="2"></textarea></div>
+            </div>
+            <div class="flex justify-end gap-2 mt-6">
+                <button @click="showTeamModal = false" class="btn btn-secondary">Cancel</button>
+                <button @click="saveTeam()" class="btn btn-primary">Save Team</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- RESOURCE MODAL -->
+    <div x-show="showResourceModal" class="modal-overlay" @click.self="showResourceModal = false" x-transition>
+        <div class="modal-content p-6">
+            <h2 class="text-lg font-bold mb-4" x-text="editingResource ? 'Edit Resource' : 'Add Resource'"></h2>
+            <div class="grid grid-cols-2 gap-4">
+                <div class="col-span-2"><label class="block text-sm font-medium text-gray-700 mb-1">Full Name</label><input x-model="resourceForm.full_name" class="input"></div>
+                <div><label class="block text-sm font-medium text-gray-700 mb-1">Title</label><input x-model="resourceForm.title" class="input"></div>
+                <div>
+                    <label class="block text-sm font-medium text-gray-700 mb-1">Capacity Role</label>
+                    <select x-model="resourceForm.capacity_role" class="select">
+                        <option value="lead">Lead — Can own & drive work end-to-end</option>
+                        <option value="support">Support — Executes within defined scope</option>
+                    </select>
+                </div>
+                <div>
+                    <label class="block text-sm font-medium text-gray-700 mb-1">Resource Type</label>
+                    <select x-model="resourceForm.resource_type" class="select">
+                        <option value="internal_employee">Internal Employee</option>
+                        <option value="onshore_contractor">Onshore Contractor</option>
+                        <option value="offshore_contractor">Offshore Contractor</option>
+                    </select>
+                </div>
+                <div><label class="block text-sm font-medium text-gray-700 mb-1">FTE (0.1 - 1.0)</label><input type="number" x-model.number="resourceForm.fte_equivalent" min="0.1" max="1.0" step="0.1" class="input"></div>
+                <div><label class="block text-sm font-medium text-gray-700 mb-1">BAU Allocation %</label><input type="number" x-model.number="resourceForm.bau_pct" min="0" max="100" step="5" class="input"></div>
+                <div>
+                    <label class="block text-sm font-medium text-gray-700 mb-1">Available FTE (computed)</label>
+                    <div class="input bg-gray-50 text-navy-800 font-semibold" x-text="(resourceForm.fte_equivalent * (1 - resourceForm.bau_pct / 100)).toFixed(2)"></div>
+                </div>
+                <div><label class="block text-sm font-medium text-gray-700 mb-1">Annual Cost (USD)</label><input type="number" x-model.number="resourceForm.annual_cost_usd" class="input"></div>
+                <div class="flex items-center gap-2 col-span-2">
+                    <input type="checkbox" x-model="resourceForm.is_classification_tentative" class="rounded">
+                    <label class="text-sm text-gray-700">Tentative classification</label>
+                    <input x-show="resourceForm.is_classification_tentative" type="number" x-model.number="resourceForm.classification_confidence" min="0" max="1" step="0.1" class="input w-24 ml-2" placeholder="0.0-1.0">
+                </div>
+            </div>
+            <div class="flex justify-end gap-2 mt-6">
+                <button @click="showResourceModal = false" class="btn btn-secondary">Cancel</button>
+                <button @click="saveResource()" class="btn btn-primary">Save Resource</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- INITIATIVE MODAL -->
+    <div x-show="showInitiativeModal" class="modal-overlay" @click.self="showInitiativeModal = false" x-transition>
+        <div class="modal-content p-6">
+            <h2 class="text-lg font-bold mb-4" x-text="editingInitiative ? 'Edit Initiative' : 'Add Initiative'"></h2>
+            <div class="grid grid-cols-2 gap-4">
+                <div class="col-span-2"><label class="block text-sm font-medium text-gray-700 mb-1">Initiative Name</label><input x-model="initiativeForm.name" class="input"></div>
+                <div class="col-span-2"><label class="block text-sm font-medium text-gray-700 mb-1">Description</label><textarea x-model="initiativeForm.description" class="input" rows="2"></textarea></div>
+                <div>
+                    <label class="block text-sm font-medium text-gray-700 mb-1">Status</label>
+                    <select x-model="initiativeForm.status" class="select">
+                        <option value="greenlit">Greenlit</option><option value="sequenced">Sequenced</option>
+                        <option value="constrained">Constrained</option><option value="deferred">Deferred</option>
+                    </select>
+                </div>
+                <div>
+                    <label class="block text-sm font-medium text-gray-700 mb-1">Priority</label>
+                    <select x-model="initiativeForm.priority" class="select">
+                        <option value="critical">Critical</option><option value="high">High</option>
+                        <option value="medium">Medium</option><option value="low">Low</option>
+                    </select>
+                </div>
+                <div>
+                    <label class="block text-sm font-medium text-gray-700 mb-1">Owning Team</label>
+                    <select x-model="initiativeForm.owning_team_id" class="select">
+                        <option value="">— Select —</option>
+                        <template x-for="t in teams" :key="t.id"><option :value="t.id" x-text="t.name"></option></template>
+                    </select>
+                </div>
+                <div><label class="block text-sm font-medium text-gray-700 mb-1">Business Value (0-100)</label><input type="number" x-model.number="initiativeForm.business_value_score" min="0" max="100" class="input"></div>
+                <div><label class="block text-sm font-medium text-gray-700 mb-1">Readiness (0-100)</label><input type="number" x-model.number="initiativeForm.strategic_readiness_score" min="0" max="100" class="input"></div>
+                <div><label class="block text-sm font-medium text-gray-700 mb-1">Lead FTE Required</label><input type="number" x-model.number="initiativeForm.total_lead_fte_required" step="0.25" class="input"></div>
+                <div><label class="block text-sm font-medium text-gray-700 mb-1">Support FTE Required</label><input type="number" x-model.number="initiativeForm.total_support_fte_required" step="0.25" class="input"></div>
+                <div><label class="block text-sm font-medium text-gray-700 mb-1">Start Quarter</label><input x-model="initiativeForm.target_start_quarter" placeholder="2026-Q2" class="input"></div>
+                <div><label class="block text-sm font-medium text-gray-700 mb-1">End Quarter</label><input x-model="initiativeForm.target_end_quarter" placeholder="2026-Q4" class="input"></div>
+            </div>
+            <div class="flex justify-end gap-2 mt-6">
+                <button @click="showInitiativeModal = false" class="btn btn-secondary">Cancel</button>
+                <button @click="saveInitiative()" class="btn btn-primary">Save Initiative</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- SCENARIO MODAL -->
+    <div x-show="showScenarioModal" class="modal-overlay" @click.self="showScenarioModal = false" x-transition>
+        <div class="modal-content p-6">
+            <h2 class="text-lg font-bold mb-4">New Scenario</h2>
+            <div class="space-y-4">
+                <div><label class="block text-sm font-medium text-gray-700 mb-1">Scenario Name</label><input x-model="scenarioForm.name" class="input" placeholder="e.g. Q3 Augmented - Onshore"></div>
+                <div><label class="block text-sm font-medium text-gray-700 mb-1">Description</label><textarea x-model="scenarioForm.description" class="input" rows="2"></textarea></div>
+                <div><label class="block text-sm font-medium text-gray-700 mb-1">Base Quarter</label><input x-model="scenarioForm.base_quarter" placeholder="2026-Q2" class="input"></div>
+                <div><label class="block text-sm font-medium text-gray-700 mb-1">Lead Tax Rate (FTE per initiative)</label><input type="number" x-model.number="scenarioForm.lead_tax_rate" step="0.05" min="0" max="1" class="input"></div>
+            </div>
+            <div class="flex justify-end gap-2 mt-6">
+                <button @click="showScenarioModal = false" class="btn btn-secondary">Cancel</button>
+                <button @click="saveScenario()" class="btn btn-primary">Create Scenario</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- RATE MODAL -->
+    <div x-show="showRateModal" class="modal-overlay" @click.self="showRateModal = false" x-transition>
+        <div class="modal-content p-6">
+            <h2 class="text-lg font-bold mb-4">Add Augmentation Rate</h2>
+            <div class="grid grid-cols-2 gap-4">
+                <div class="col-span-2"><label class="block text-sm font-medium text-gray-700 mb-1">Name</label><input x-model="rateForm.name" class="input" placeholder="e.g. Offshore Java Developer"></div>
+                <div>
+                    <label class="block text-sm font-medium text-gray-700 mb-1">Region</label>
+                    <select x-model="rateForm.region" class="select"><option value="onshore">Onshore</option><option value="offshore">Offshore</option><option value="nearshore">Nearshore</option></select>
+                </div>
+                <div>
+                    <label class="block text-sm font-medium text-gray-700 mb-1">Type</label>
+                    <select x-model="rateForm.augmentation_type" class="select"><option value="contractor">Contractor</option><option value="managed_service">Managed Service</option><option value="staff_aug">Staff Aug</option></select>
+                </div>
+                <div>
+                    <label class="block text-sm font-medium text-gray-700 mb-1">Capacity Role</label>
+                    <select x-model="rateForm.capacity_role" class="select"><option value="lead">Lead</option><option value="support">Support</option></select>
+                </div>
+                <div><label class="block text-sm font-medium text-gray-700 mb-1">Daily Rate (USD)</label><input type="number" x-model.number="rateForm.daily_rate_usd" class="input"></div>
+                <div><label class="block text-sm font-medium text-gray-700 mb-1">Ramp Weeks</label><input type="number" x-model.number="rateForm.ramp_weeks" class="input"></div>
+            </div>
+            <div class="flex justify-end gap-2 mt-6">
+                <button @click="showRateModal = false" class="btn btn-secondary">Cancel</button>
+                <button @click="saveAugRate()" class="btn btn-primary">Save Rate</button>
+            </div>
+        </div>
+    </div>
+
+<script>
+function app() {
+    return {
+        // Auth
+        user: null, isDemo: false, authEmail: '', authPassword: '', authError: '',
+        supabase: null,
+
+        // Navigation
+        currentView: 'dashboard',
+
+        // Modals
+        showTeamModal: false, showResourceModal: false, showInitiativeModal: false,
+        showScenarioModal: false, showRateModal: false,
+
+        // Data
+        teams: [], resources: [], initiatives: [], scenarios: [], augRates: [],
+        selectedTeam: null, selectedScenario: null, scenarioResults: null,
+        editingTeam: null, editingResource: null, editingInitiative: null,
+        portfolioFilter: 'all',
+
+        // Forms
+        teamForm: { name: '', description: '', department: '' },
+        resourceForm: { full_name: '', title: '', capacity_role: 'support', resource_type: 'internal_employee', fte_equivalent: 1.0, bau_pct: 20, annual_cost_usd: 0, is_classification_tentative: false, classification_confidence: 0.5 },
+        initiativeForm: { name: '', description: '', status: 'sequenced', priority: 'medium', owning_team_id: '', business_value_score: 50, strategic_readiness_score: 50, total_lead_fte_required: 0.5, total_support_fte_required: 1.0, target_start_quarter: '', target_end_quarter: '' },
+        scenarioForm: { name: '', description: '', base_quarter: '2026-Q2', lead_tax_rate: 0.25 },
+        rateForm: { name: '', region: 'offshore', augmentation_type: 'contractor', capacity_role: 'support', daily_rate_usd: 400, ramp_weeks: 4 },
+
+        async init() {
+            this.supabase = window.supabase.createClient(window.SUPABASE_URL, window.SUPABASE_ANON_KEY);
+            const { data: { session } } = await this.supabase.auth.getSession();
+            if (session) { this.user = session.user; await this.loadData(); }
+        },
+
+        async login() {
+            this.authError = '';
+            const { data, error } = await this.supabase.auth.signInWithPassword({ email: this.authEmail, password: this.authPassword });
+            if (error) { this.authError = error.message; return; }
+            this.user = data.user; await this.loadData();
+        },
+
+        async signup() {
+            this.authError = '';
+            const { data, error } = await this.supabase.auth.signUp({ email: this.authEmail, password: this.authPassword });
+            if (error) { this.authError = error.message; return; }
+            if (data.user) {
+                await this.supabase.from('profiles').upsert({ id: data.user.id, email: this.authEmail, full_name: this.authEmail.split('@')[0], app_role: 'cto' });
+                this.user = data.user; await this.loadData();
+            }
+        },
+
+        loadDemo() {
+            this.isDemo = true;
+            this.user = { email: 'demo@scripps.com', id: 'demo' };
+            this.teams = [
+                { id: 't1', name: 'Platform Engineering', department: 'Technology', description: 'Core platform and infrastructure' },
+                { id: 't2', name: 'Data Solutions', department: 'Technology', description: 'Data pipelines and analytics' },
+                { id: 't3', name: 'Application Development', department: 'Technology', description: 'Business applications and integrations' },
+                { id: 't4', name: 'Broadcast Systems', department: 'Technology', description: 'Playout, automation, and broadcast tech' },
+                { id: 't5', name: 'Cloud & DevOps', department: 'Technology', description: 'Cloud infrastructure and CI/CD' },
+            ];
+            this.resources = [
+                { id: 'r1', team_id: 't1', full_name: 'Sarah Chen', title: 'Sr. Platform Architect', capacity_role: 'lead', resource_type: 'internal_employee', fte_equivalent: 1.0, bau_allocation: 0.20, available_fte: 0.80, annual_cost_usd: 195000, is_classification_tentative: false, classification_confidence: null },
+                { id: 'r2', team_id: 't1', full_name: 'Marcus Johnson', title: 'Platform Engineer', capacity_role: 'support', resource_type: 'internal_employee', fte_equivalent: 1.0, bau_allocation: 0.15, available_fte: 0.85, annual_cost_usd: 145000, is_classification_tentative: false, classification_confidence: null },
+                { id: 'r3', team_id: 't1', full_name: 'Priya Patel', title: 'Sr. Engineer', capacity_role: 'support', resource_type: 'internal_employee', fte_equivalent: 1.0, bau_allocation: 0.25, available_fte: 0.75, annual_cost_usd: 155000, is_classification_tentative: true, classification_confidence: 0.7 },
+                { id: 'r4', team_id: 't1', full_name: 'Offshore Team Alpha', title: 'Dev Team', capacity_role: 'support', resource_type: 'offshore_contractor', fte_equivalent: 1.0, bau_allocation: 0.10, available_fte: 0.90, annual_cost_usd: 85000, is_classification_tentative: false, classification_confidence: null },
+                { id: 'r5', team_id: 't2', full_name: 'Matt Booher', title: 'VP Data Solutions', capacity_role: 'lead', resource_type: 'internal_employee', fte_equivalent: 1.0, bau_allocation: 0.40, available_fte: 0.60, annual_cost_usd: 220000, is_classification_tentative: false, classification_confidence: null },
+                { id: 'r6', team_id: 't2', full_name: 'Elena Rodriguez', title: 'Data Engineer', capacity_role: 'support', resource_type: 'internal_employee', fte_equivalent: 1.0, bau_allocation: 0.20, available_fte: 0.80, annual_cost_usd: 140000, is_classification_tentative: false, classification_confidence: null },
+                { id: 'r7', team_id: 't2', full_name: 'James Kim', title: 'Sr. Data Analyst', capacity_role: 'support', resource_type: 'internal_employee', fte_equivalent: 1.0, bau_allocation: 0.15, available_fte: 0.85, annual_cost_usd: 130000, is_classification_tentative: true, classification_confidence: 0.6 },
+                { id: 'r8', team_id: 't3', full_name: 'David Park', title: 'Engineering Manager', capacity_role: 'lead', resource_type: 'internal_employee', fte_equivalent: 1.0, bau_allocation: 0.30, available_fte: 0.70, annual_cost_usd: 185000, is_classification_tentative: false, classification_confidence: null },
+                { id: 'r9', team_id: 't3', full_name: 'Amy Torres', title: 'Sr. Developer', capacity_role: 'lead', resource_type: 'internal_employee', fte_equivalent: 1.0, bau_allocation: 0.20, available_fte: 0.80, annual_cost_usd: 165000, is_classification_tentative: false, classification_confidence: null },
+                { id: 'r10', team_id: 't3', full_name: 'Contract Dev Team', title: 'Onshore Contractors', capacity_role: 'support', resource_type: 'onshore_contractor', fte_equivalent: 1.0, bau_allocation: 0.05, available_fte: 0.95, annual_cost_usd: 260000, is_classification_tentative: false, classification_confidence: null },
+                { id: 'r11', team_id: 't3', full_name: 'Offshore Dev Pool', title: 'Offshore Support', capacity_role: 'support', resource_type: 'offshore_contractor', fte_equivalent: 1.0, bau_allocation: 0.10, available_fte: 0.90, annual_cost_usd: 78000, is_classification_tentative: false, classification_confidence: null },
+                { id: 'r12', team_id: 't4', full_name: 'Tom Bradley', title: 'Broadcast Tech Lead', capacity_role: 'lead', resource_type: 'internal_employee', fte_equivalent: 1.0, bau_allocation: 0.35, available_fte: 0.65, annual_cost_usd: 175000, is_classification_tentative: false, classification_confidence: null },
+                { id: 'r13', team_id: 't4', full_name: 'Lisa Wang', title: 'Broadcast Engineer', capacity_role: 'support', resource_type: 'internal_employee', fte_equivalent: 1.0, bau_allocation: 0.30, available_fte: 0.70, annual_cost_usd: 135000, is_classification_tentative: false, classification_confidence: null },
+                { id: 'r14', team_id: 't5', full_name: 'Kevin O\'Brien', title: 'DevOps Lead', capacity_role: 'lead', resource_type: 'internal_employee', fte_equivalent: 1.0, bau_allocation: 0.25, available_fte: 0.75, annual_cost_usd: 180000, is_classification_tentative: false, classification_confidence: null },
+                { id: 'r15', team_id: 't5', full_name: 'Raj Sharma', title: 'Cloud Engineer', capacity_role: 'support', resource_type: 'internal_employee', fte_equivalent: 1.0, bau_allocation: 0.20, available_fte: 0.80, annual_cost_usd: 150000, is_classification_tentative: false, classification_confidence: null },
+            ];
+            this.initiatives = [
+                { id: 'i1', name: 'O2C Automation Platform', status: 'greenlit', priority: 'critical', owning_team_id: 't1', business_value_score: 92, strategic_readiness_score: 78, composite_score: 85, total_lead_fte_required: 1.5, total_support_fte_required: 3.0, target_start_quarter: '2026-Q1', target_end_quarter: '2026-Q4' },
+                { id: 'i2', name: 'TMS Replacement', status: 'greenlit', priority: 'critical', owning_team_id: 't4', business_value_score: 88, strategic_readiness_score: 65, composite_score: 76.5, total_lead_fte_required: 1.0, total_support_fte_required: 2.5, target_start_quarter: '2026-Q2', target_end_quarter: '2027-Q2' },
+                { id: 'i3', name: 'Data Lake Modernization', status: 'greenlit', priority: 'high', owning_team_id: 't2', business_value_score: 82, strategic_readiness_score: 85, composite_score: 83.5, total_lead_fte_required: 0.75, total_support_fte_required: 2.0, target_start_quarter: '2026-Q1', target_end_quarter: '2026-Q3' },
+                { id: 'i4', name: 'Cloud Migration Phase 3', status: 'greenlit', priority: 'high', owning_team_id: 't5', business_value_score: 78, strategic_readiness_score: 90, composite_score: 84, total_lead_fte_required: 0.75, total_support_fte_required: 1.5, target_start_quarter: '2026-Q2', target_end_quarter: '2026-Q4' },
+                { id: 'i5', name: 'FAST Channel Expansion', status: 'sequenced', priority: 'high', owning_team_id: 't4', business_value_score: 85, strategic_readiness_score: 70, composite_score: 77.5, total_lead_fte_required: 0.5, total_support_fte_required: 1.5, target_start_quarter: '2026-Q3', target_end_quarter: '2027-Q1' },
+                { id: 'i6', name: 'Enterprise API Gateway', status: 'sequenced', priority: 'medium', owning_team_id: 't1', business_value_score: 72, strategic_readiness_score: 80, composite_score: 76, total_lead_fte_required: 0.5, total_support_fte_required: 1.0, target_start_quarter: '2026-Q3', target_end_quarter: '2026-Q4' },
+                { id: 'i7', name: 'ML Pipeline for Ad Targeting', status: 'constrained', priority: 'high', owning_team_id: 't2', business_value_score: 90, strategic_readiness_score: 55, composite_score: 72.5, total_lead_fte_required: 1.0, total_support_fte_required: 2.0, target_start_quarter: '2026-Q2', target_end_quarter: '2027-Q1', lead_gap: -0.4 },
+                { id: 'i8', name: 'Playout Automation Upgrade', status: 'constrained', priority: 'medium', owning_team_id: 't4', business_value_score: 75, strategic_readiness_score: 60, composite_score: 67.5, total_lead_fte_required: 0.75, total_support_fte_required: 1.5, target_start_quarter: '2026-Q3', target_end_quarter: '2027-Q1', lead_gap: -0.35 },
+                { id: 'i9', name: 'Self-Service BI Portal', status: 'deferred', priority: 'medium', owning_team_id: 't2', business_value_score: 68, strategic_readiness_score: 75, composite_score: 71.5, total_lead_fte_required: 0.5, total_support_fte_required: 1.0, target_start_quarter: '2027-Q1', target_end_quarter: '2027-Q3' },
+                { id: 'i10', name: 'Legacy System Decommission', status: 'deferred', priority: 'low', owning_team_id: 't3', business_value_score: 55, strategic_readiness_score: 45, composite_score: 50, total_lead_fte_required: 0.5, total_support_fte_required: 2.0, target_start_quarter: '2027-Q2', target_end_quarter: '2027-Q4' },
+                { id: 'i11', name: 'Digital Rights Mgmt Refresh', status: 'sequenced', priority: 'medium', owning_team_id: 't3', business_value_score: 70, strategic_readiness_score: 62, composite_score: 66, total_lead_fte_required: 0.5, total_support_fte_required: 1.0, target_start_quarter: '2026-Q4', target_end_quarter: '2027-Q2' },
+                { id: 'i12', name: 'Newsroom Workflow Modernization', status: 'constrained', priority: 'high', owning_team_id: 't3', business_value_score: 80, strategic_readiness_score: 72, composite_score: 76, total_lead_fte_required: 0.75, total_support_fte_required: 1.5, target_start_quarter: '2026-Q2', target_end_quarter: '2026-Q4', lead_gap: -0.25 },
+            ];
+            this.scenarios = [
+                { id: 's1', name: 'Base Case — Current State', description: 'Current staffing against current portfolio. The honest starting point.', status: 'active', base_quarter: '2026-Q2', lead_tax_rate: 0.25, use_optimistic_classification: false },
+                { id: 's2', name: 'Augmented — 2 Onshore Leads', description: 'Add 2 onshore lead resources to Platform and Data teams', status: 'draft', base_quarter: '2026-Q2', lead_tax_rate: 0.25, use_optimistic_classification: false },
+                { id: 's3', name: 'Portfolio Trim — Top 8 Only', description: 'Remove lowest-value initiatives, keep top 8 by composite score', status: 'draft', base_quarter: '2026-Q2', lead_tax_rate: 0.25, use_optimistic_classification: false },
+            ];
+            this.augRates = [
+                { id: 'a1', name: 'Onshore Sr. Developer', region: 'onshore', augmentation_type: 'contractor', capacity_role: 'support', daily_rate_usd: 850, annual_rate_usd: 221000, ramp_weeks: 2 },
+                { id: 'a2', name: 'Onshore Tech Lead', region: 'onshore', augmentation_type: 'contractor', capacity_role: 'lead', daily_rate_usd: 1200, annual_rate_usd: 312000, ramp_weeks: 3 },
+                { id: 'a3', name: 'Offshore Developer (India)', region: 'offshore', augmentation_type: 'staff_aug', capacity_role: 'support', daily_rate_usd: 350, annual_rate_usd: 91000, ramp_weeks: 4 },
+                { id: 'a4', name: 'Offshore QA Engineer', region: 'offshore', augmentation_type: 'staff_aug', capacity_role: 'support', daily_rate_usd: 280, annual_rate_usd: 72800, ramp_weeks: 3 },
+                { id: 'a5', name: 'Nearshore Full-Stack Dev', region: 'nearshore', augmentation_type: 'contractor', capacity_role: 'support', daily_rate_usd: 550, annual_rate_usd: 143000, ramp_weeks: 3 },
+            ];
+        },
+
+        async logout() {
+            if (!this.isDemo) await this.supabase.auth.signOut();
+            this.user = null; this.isDemo = false; this.teams = []; this.resources = []; this.initiatives = []; this.scenarios = [];
+        },
+
+        async loadData() {
+            if (this.isDemo) return;
+            const [t, r, i, s, a] = await Promise.all([
+                this.supabase.from('teams').select('*').eq('is_active', true),
+                this.supabase.from('resources').select('*').eq('is_active', true),
+                this.supabase.from('initiatives').select('*').eq('is_active', true),
+                this.supabase.from('scenarios').select('*'),
+                this.supabase.from('augmentation_rates').select('*').eq('is_active', true),
+            ]);
+            this.teams = t.data || []; this.resources = r.data || [];
+            this.initiatives = i.data || []; this.scenarios = s.data || [];
+            this.augRates = a.data || [];
+        },
+
+        // --- Computed ---
+        get totalLeadFTE() { return this.resources.filter(r => r.capacity_role === 'lead').reduce((s, r) => s + r.available_fte, 0); },
+        get totalSupportFTE() { return this.resources.filter(r => r.capacity_role === 'support').reduce((s, r) => s + r.available_fte, 0); },
+        get totalLeadDemand() { return this.activeInitiatives.reduce((s, i) => s + (i.total_lead_fte_required || 0), 0); },
+        get totalSupportDemand() { return this.activeInitiatives.reduce((s, i) => s + (i.total_support_fte_required || 0), 0); },
+        get overallCoverage() { return this.totalLeadDemand > 0 ? this.totalLeadFTE / this.totalLeadDemand : 1.0; },
+        get carryingCapacity() { return Math.floor(this.totalLeadFTE / 0.25); },
+        get activeInitiatives() { return this.initiatives.filter(i => i.status !== 'deferred'); },
+        get filteredInitiatives() { return this.portfolioFilter === 'all' ? this.initiatives : this.initiatives.filter(i => i.status === this.portfolioFilter); },
+        get atRiskInitiatives() { return this.initiatives.filter(i => (i.status === 'constrained' || i.status === 'deferred') && i.composite_score >= 65).sort((a, b) => b.composite_score - a.composite_score); },
+        get statusBreakdown() {
+            const counts = { greenlit: 0, sequenced: 0, constrained: 0, deferred: 0 };
+            this.initiatives.forEach(i => counts[i.status]++);
+            return [
+                { status: 'greenlit', count: counts.greenlit, color: 'text-emerald-700', bg: 'bg-emerald-500' },
+                { status: 'sequenced', count: counts.sequenced, color: 'text-amber-700', bg: 'bg-amber-500' },
+                { status: 'constrained', count: counts.constrained, color: 'text-orange-700', bg: 'bg-orange-500' },
+                { status: 'deferred', count: counts.deferred, color: 'text-red-700', bg: 'bg-red-500' },
+            ];
+        },
+        get teamCoverages() {
+            return this.teams.map(t => {
+                const leadFTE = this.teamLeadFTE(t.id);
+                const demand = this.initiatives.filter(i => i.owning_team_id === t.id && i.status !== 'deferred').reduce((s, i) => s + (i.total_lead_fte_required || 0), 0);
+                return { name: t.name, ratio: demand > 0 ? leadFTE / demand : 1.0 };
+            });
+        },
+
+        // --- Helpers ---
+        teamResources(teamId) { return this.resources.filter(r => r.team_id === teamId); },
+        teamLeadFTE(teamId) { return this.resources.filter(r => r.team_id === teamId && r.capacity_role === 'lead').reduce((s, r) => s + r.available_fte, 0); },
+        teamSupportFTE(teamId) { return this.resources.filter(r => r.team_id === teamId && r.capacity_role === 'support').reduce((s, r) => s + r.available_fte, 0); },
+        teamCoverageRatio(teamId) {
+            const lead = this.teamLeadFTE(teamId);
+            const demand = this.initiatives.filter(i => i.owning_team_id === teamId && i.status !== 'deferred').reduce((s, i) => s + (i.total_lead_fte_required || 0), 0);
+            return demand > 0 ? lead / demand : 1.0;
+        },
+        teamName(teamId) { return this.teams.find(t => t.id === teamId)?.name || '—'; },
+        statusBadge(s) { return { greenlit: 'badge-green', sequenced: 'badge-amber', constrained: 'badge-orange', deferred: 'badge-red' }[s] || ''; },
+
+        selectTeam(t) { this.selectedTeam = t; },
+        selectScenario(s) { this.selectedScenario = s; this.scenarioResults = null; },
+
+        // --- CRUD ---
+        async saveTeam() {
+            const data = { ...this.teamForm };
+            if (this.isDemo) {
+                if (this.editingTeam) { Object.assign(this.editingTeam, data); }
+                else { this.teams.push({ id: 't' + Date.now(), ...data }); }
+            } else {
+                if (this.editingTeam) { await this.supabase.from('teams').update(data).eq('id', this.editingTeam.id); }
+                else { await this.supabase.from('teams').insert(data); }
+                await this.loadData();
+            }
+            this.showTeamModal = false;
+        },
+
+        resetResourceForm() {
+            this.resourceForm = { full_name: '', title: '', capacity_role: 'support', resource_type: 'internal_employee', fte_equivalent: 1.0, bau_pct: 20, annual_cost_usd: 0, is_classification_tentative: false, classification_confidence: 0.5 };
+        },
+        editResource(r) {
+            this.editingResource = r;
+            this.resourceForm = { ...r, bau_pct: r.bau_allocation * 100 };
+            this.showResourceModal = true;
+        },
+        async saveResource() {
+            const f = this.resourceForm;
+            const data = { team_id: this.selectedTeam.id, full_name: f.full_name, title: f.title, capacity_role: f.capacity_role, resource_type: f.resource_type, fte_equivalent: f.fte_equivalent, bau_allocation: f.bau_pct / 100, annual_cost_usd: f.annual_cost_usd, is_classification_tentative: f.is_classification_tentative, classification_confidence: f.is_classification_tentative ? f.classification_confidence : null };
+            if (this.isDemo) {
+                const avail = data.fte_equivalent * (1 - data.bau_allocation);
+                if (this.editingResource) { Object.assign(this.editingResource, data, { available_fte: avail }); }
+                else { this.resources.push({ id: 'r' + Date.now(), ...data, available_fte: avail }); }
+            } else {
+                if (this.editingResource) { await this.supabase.from('resources').update(data).eq('id', this.editingResource.id); }
+                else { await this.supabase.from('resources').insert(data); }
+                await this.loadData();
+            }
+            this.showResourceModal = false; this.editingResource = null;
+        },
+        async deleteResource(id) {
+            if (this.isDemo) { this.resources = this.resources.filter(r => r.id !== id); }
+            else { await this.supabase.from('resources').update({ is_active: false }).eq('id', id); await this.loadData(); }
+        },
+
+        resetInitiativeForm() {
+            this.initiativeForm = { name: '', description: '', status: 'sequenced', priority: 'medium', owning_team_id: '', business_value_score: 50, strategic_readiness_score: 50, total_lead_fte_required: 0.5, total_support_fte_required: 1.0, target_start_quarter: '', target_end_quarter: '' };
+        },
+        editInitiative(i) { this.editingInitiative = i; this.initiativeForm = { ...i }; this.showInitiativeModal = true; },
+        async saveInitiative() {
+            const f = this.initiativeForm;
+            const data = { name: f.name, description: f.description, status: f.status, priority: f.priority, owning_team_id: f.owning_team_id || null, business_value_score: f.business_value_score, strategic_readiness_score: f.strategic_readiness_score, total_lead_fte_required: f.total_lead_fte_required, total_support_fte_required: f.total_support_fte_required, target_start_quarter: f.target_start_quarter, target_end_quarter: f.target_end_quarter };
+            if (this.isDemo) {
+                data.composite_score = (data.business_value_score + data.strategic_readiness_score) / 2;
+                if (this.editingInitiative) { Object.assign(this.editingInitiative, data); }
+                else { this.initiatives.push({ id: 'i' + Date.now(), ...data }); }
+            } else {
+                if (this.editingInitiative) { await this.supabase.from('initiatives').update(data).eq('id', this.editingInitiative.id); }
+                else { await this.supabase.from('initiatives').insert(data); }
+                await this.loadData();
+            }
+            this.showInitiativeModal = false; this.editingInitiative = null;
+        },
+
+        resetScenarioForm() { this.scenarioForm = { name: '', description: '', base_quarter: '2026-Q2', lead_tax_rate: 0.25 }; },
+        async saveScenario() {
+            const f = this.scenarioForm;
+            const data = { name: f.name, description: f.description, base_quarter: f.base_quarter, lead_tax_rate: f.lead_tax_rate, status: 'draft' };
+            if (this.isDemo) { this.scenarios.push({ id: 's' + Date.now(), ...data, use_optimistic_classification: false }); }
+            else { data.created_by = this.user.id; await this.supabase.from('scenarios').insert(data); await this.loadData(); }
+            this.showScenarioModal = false;
+        },
+
+        runScenario() {
+            const s = this.selectedScenario;
+            const activeCount = this.activeInitiatives.length;
+            const taxConsumed = activeCount * (s.lead_tax_rate || 0.25);
+            const netLead = this.totalLeadFTE - taxConsumed;
+            const coverage = this.totalLeadDemand > 0 ? netLead / this.totalLeadDemand : 1.0;
+            const totalCost = this.resources.reduce((sum, r) => sum + (r.annual_cost_usd || 0), 0);
+            const gc = this.initiatives.filter(i => i.status === 'greenlit').length;
+            const sc = this.initiatives.filter(i => i.status === 'sequenced').length;
+            this.scenarioResults = { lead_coverage: coverage, greenlit: gc, sequenced: sc, constrained: this.initiatives.filter(i => i.status === 'constrained').length, deferred: this.initiatives.filter(i => i.status === 'deferred').length, total_cost: totalCost };
+        },
+
+        resetRateForm() { this.rateForm = { name: '', region: 'offshore', augmentation_type: 'contractor', capacity_role: 'support', daily_rate_usd: 400, ramp_weeks: 4 }; },
+        async saveAugRate() {
+            const f = this.rateForm;
+            const data = { name: f.name, region: f.region, augmentation_type: f.augmentation_type, capacity_role: f.capacity_role, daily_rate_usd: f.daily_rate_usd, ramp_weeks: f.ramp_weeks };
+            if (this.isDemo) { this.augRates.push({ id: 'a' + Date.now(), ...data, annual_rate_usd: data.daily_rate_usd * 260 }); }
+            else { await this.supabase.from('augmentation_rates').insert(data); await this.loadData(); }
+            this.showRateModal = false;
+        },
+        async deleteAugRate(id) {
+            if (this.isDemo) { this.augRates = this.augRates.filter(r => r.id !== id); }
+            else { await this.supabase.from('augmentation_rates').update({ is_active: false }).eq('id', id); await this.loadData(); }
+        },
+    };
+}
+</script>
+</body>
+</html>
