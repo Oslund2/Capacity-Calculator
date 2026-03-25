@@ -8,6 +8,7 @@
     <script defer src="https://cdn.jsdelivr.net/npm/alpinejs@3.x.x/dist/cdn.min.js"></script>
     <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
     <script src="supabase-config.js"></script>
+    <script src="offshore-data.js"></script>
     <script>
         tailwind.config = {
             theme: {
@@ -61,6 +62,16 @@
         .scenario-card:hover{box-shadow:0 4px 12px rgba(0,0,0,0.12);transform:translateY(-1px)}
         .slide-panel{position:fixed;right:0;top:0;bottom:0;width:420px;background:#fff;box-shadow:-4px 0 24px rgba(0,0,0,0.15);z-index:50;transform:translateX(100%);transition:transform 0.3s ease}
         .slide-panel.open{transform:translateX(0)}
+        .tip{position:relative;cursor:help;border-bottom:1px dotted #94a3b8}
+        .tip::after{content:attr(data-tip);position:absolute;bottom:calc(100% + 6px);left:50%;transform:translateX(-50%);background:#1e293b;color:#e2e8f0;padding:6px 10px;border-radius:6px;font-size:11px;line-height:1.4;white-space:normal;width:max-content;max-width:280px;z-index:60;opacity:0;pointer-events:none;transition:opacity 0.15s;box-shadow:0 4px 12px rgba(0,0,0,0.3)}
+        .tip:hover::after{opacity:1}
+        .tip-icon{display:inline-flex;align-items:center;justify-content:center;width:14px;height:14px;border-radius:50%;background:#cbd5e1;color:#475569;font-size:9px;font-weight:700;cursor:help;flex-shrink:0;position:relative}
+        .tip-icon::after{content:attr(data-tip);position:absolute;bottom:calc(100% + 6px);left:50%;transform:translateX(-50%);background:#1e293b;color:#e2e8f0;padding:6px 10px;border-radius:6px;font-size:11px;line-height:1.4;white-space:normal;width:max-content;max-width:280px;z-index:60;opacity:0;pointer-events:none;transition:opacity 0.15s;box-shadow:0 4px 12px rgba(0,0,0,0.3)}
+        .tip-icon:hover::after{opacity:1}
+        .aug-tab{padding:0.5rem 1rem;font-size:0.8rem;font-weight:500;border-radius:0.5rem 0.5rem 0 0;cursor:pointer;transition:all 0.15s}
+        .aug-tab.active{background:#fff;color:#1e293b;border:1px solid #e2e8f0;border-bottom:none}
+        .aug-tab:not(.active){background:#e2e8f0;color:#64748b}
+        .risk-bar{height:6px;border-radius:3px;background:#e2e8f0}.risk-bar-fill{height:100%;border-radius:3px;transition:width 0.4s}
     </style>
 </head>
 <body class="h-full bg-slate-100" x-data="app()" x-cloak x-init="init()">
@@ -80,7 +91,7 @@
                     {id:'teams',label:'Teams & Capacity',icon:'M17 20h5v-2a3 3 0 00-5.356-1.857M17 20H7m10 0v-2c0-.656-.126-1.283-.356-1.857M7 20H2v-2a3 3 0 015.356-1.857M7 20v-2c0-.656.126-1.283.356-1.857m0 0a5.002 5.002 0 019.288 0M15 7a3 3 0 11-6 0 3 3 0 016 0z'},
                     {id:'portfolio',label:'Portfolio',icon:'M19 11H5m14 0a2 2 0 012 2v6a2 2 0 01-2 2H5a2 2 0 01-2-2v-6a2 2 0 012-2m14 0V9a2 2 0 00-2-2M5 11V9a2 2 0 012-2m0 0V5a2 2 0 012-2h6a2 2 0 012 2v2M7 7h10'},
                     {id:'scenarios',label:'Scenarios',icon:'M8 7h12m0 0l-4-4m4 4l-4 4m0 6H4m0 0l4 4m-4-4l4-4'},
-                    {id:'augmentation',label:'Augmentation',icon:'M12 8c-1.657 0-3 .895-3 2s1.343 2 3 2 3 .895 3 2-1.343 2-3 2m0-8c1.11 0 2.08.402 2.599 1M12 8V7m0 1v8m0 0v1m0-1c-1.11 0-2.08-.402-2.599-1M21 12a9 9 0 11-18 0 9 9 0 0118 0z'}
+                    {id:'augmentation',label:'Offshoring & Aug',icon:'M12 8c-1.657 0-3 .895-3 2s1.343 2 3 2 3 .895 3 2-1.343 2-3 2m0-8c1.11 0 2.08.402 2.599 1M12 8V7m0 1v8m0 0v1m0-1c-1.11 0-2.08-.402-2.599-1M21 12a9 9 0 11-18 0 9 9 0 0118 0z'}
                 ]" :key="nav.id">
                     <button @click="currentView = nav.id" :class="currentView === nav.id ? 'active text-white' : 'text-gray-400'" class="sidebar-link w-full">
                         <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" :d="nav.icon"/></svg>
@@ -136,7 +147,7 @@
                     <!-- KPI Cards -->
                     <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4 mb-6">
                         <div class="card-raised">
-                            <div class="text-xs font-semibold text-slate-500 uppercase tracking-wider">Lead Coverage Ratio</div>
+                            <div class="text-xs font-semibold text-slate-500 uppercase tracking-wider flex items-center gap-1">Lead Coverage Ratio <span class="tip-icon" data-tip="Available lead FTE / demanded lead FTE. Below 0.8 is critical — the org has more initiatives than leaders to drive them.">?</span></div>
                             <div class="mt-2 flex items-end gap-2">
                                 <span class="text-3xl font-bold" :class="overallCoverage >= 1.0 ? 'text-emerald-600' : overallCoverage >= 0.8 ? 'text-amber-600' : 'text-red-600'" x-text="overallCoverage.toFixed(2)"></span>
                                 <span class="text-sm mb-1" :class="overallCoverage >= 1.0 ? 'text-emerald-600' : overallCoverage >= 0.8 ? 'text-amber-600' : 'text-red-600'" x-text="overallCoverage >= 1.0 ? 'Sufficient' : overallCoverage >= 0.8 ? 'Constrained' : 'Critical'"></span>
@@ -144,17 +155,17 @@
                             <div class="mt-3 w-full bg-slate-200 rounded-full h-2"><div class="h-2 rounded-full transition-all duration-500" :class="overallCoverage >= 1.0 ? 'bg-emerald-500' : overallCoverage >= 0.8 ? 'bg-amber-500' : 'bg-red-500'" :style="`width:${Math.min(overallCoverage*100,100)}%`"></div></div>
                         </div>
                         <div class="card-raised">
-                            <div class="text-xs font-semibold text-slate-500 uppercase tracking-wider">Carrying Capacity</div>
+                            <div class="text-xs font-semibold text-slate-500 uppercase tracking-wider flex items-center gap-1">Carrying Capacity <span class="tip-icon" data-tip="Max initiatives the org can actively drive: total lead FTE / 0.25 lead tax per initiative per quarter.">?</span></div>
                             <div class="mt-2 flex items-end gap-2"><span class="text-3xl font-bold text-navy-800" x-text="carryingCapacity"></span><span class="text-sm text-slate-500 mb-1">max initiatives</span></div>
                             <div class="mt-1 text-xs text-slate-400" x-text="`${activeInitiatives.length} active (${Math.round(activeInitiatives.length/Math.max(carryingCapacity,1)*100)}% utilized)`"></div>
                         </div>
                         <div class="card-raised">
-                            <div class="text-xs font-semibold text-slate-500 uppercase tracking-wider">Lead FTE</div>
+                            <div class="text-xs font-semibold text-slate-500 uppercase tracking-wider flex items-center gap-1">Lead FTE <span class="tip-icon" data-tip="People who can own and drive work end-to-end: set direction, make decisions, resolve blockers. Adjusted for BAU obligations.">?</span></div>
                             <div class="mt-2 flex items-end gap-2"><span class="text-3xl font-bold text-navy-800" x-text="totalLeadFTE.toFixed(1)"></span><span class="text-sm text-slate-500 mb-1">available</span></div>
                             <div class="mt-1 text-xs text-slate-400" x-text="`${totalLeadDemand.toFixed(1)} demanded`"></div>
                         </div>
                         <div class="card-raised">
-                            <div class="text-xs font-semibold text-slate-500 uppercase tracking-wider">Support FTE</div>
+                            <div class="text-xs font-semibold text-slate-500 uppercase tracking-wider flex items-center gap-1">Support FTE <span class="tip-icon" data-tip="Skilled executors who deliver within defined scope but need direction from a lead to be productive. Adjusted for BAU.">?</span></div>
                             <div class="mt-2 flex items-end gap-2"><span class="text-3xl font-bold text-navy-800" x-text="totalSupportFTE.toFixed(1)"></span><span class="text-sm text-slate-500 mb-1">available</span></div>
                             <div class="mt-1 text-xs text-slate-400" x-text="`${totalSupportDemand.toFixed(1)} demanded`"></div>
                         </div>
@@ -162,7 +173,7 @@
 
                     <div class="grid grid-cols-1 lg:grid-cols-2 gap-6 mb-6">
                         <div class="card-raised">
-                            <h3 class="text-sm font-semibold text-slate-700 mb-4">Initiative Status Distribution</h3>
+                            <h3 class="text-sm font-semibold text-slate-700 mb-4 flex items-center gap-1">Initiative Status Distribution <span class="tip-icon" data-tip="Greenlit = can execute now. Sequenced = queued. Constrained = blocked by lead shortage. Deferred = pushed out.">?</span></h3>
                             <div class="space-y-3">
                                 <template x-for="s in statusBreakdown" :key="s.status">
                                     <div class="flex items-center gap-3">
@@ -176,7 +187,7 @@
                             </div>
                         </div>
                         <div class="card-raised">
-                            <h3 class="text-sm font-semibold text-slate-700 mb-4">Lead Coverage by Team</h3>
+                            <h3 class="text-sm font-semibold text-slate-700 mb-4 flex items-center gap-1">Lead Coverage by Team <span class="tip-icon" data-tip="Each team's available lead FTE / lead FTE demanded by assigned initiatives.">?</span></h3>
                             <div class="space-y-3">
                                 <template x-for="t in teamCoverages" :key="t.name">
                                     <div>
@@ -220,22 +231,22 @@
                     <!-- Org Summary Strip -->
                     <div class="grid grid-cols-2 md:grid-cols-4 gap-4 mb-6">
                         <div class="card-raised bg-gradient-to-br from-blue-50 to-indigo-50 border-blue-200">
-                            <div class="text-xs font-semibold text-blue-600 uppercase tracking-wider">Total Leads</div>
+                            <div class="text-xs font-semibold text-blue-600 uppercase tracking-wider flex items-center gap-1">Total Leads <span class="tip-icon" data-tip="Total resources classified as Lead capacity — people who can own and drive work end-to-end.">?</span></div>
                             <div class="text-2xl font-bold text-blue-900 mt-1" x-text="resources.filter(r=>r.capacity_role==='lead').length"></div>
                             <div class="text-xs text-blue-500 mt-1" x-text="totalLeadFTE.toFixed(1) + ' FTE available'"></div>
                         </div>
                         <div class="card-raised bg-gradient-to-br from-amber-50 to-orange-50 border-amber-200">
-                            <div class="text-xs font-semibold text-amber-600 uppercase tracking-wider">Total Support</div>
+                            <div class="text-xs font-semibold text-amber-600 uppercase tracking-wider flex items-center gap-1">Total Support <span class="tip-icon" data-tip="Total resources classified as Support capacity — skilled executors who need lead direction.">?</span></div>
                             <div class="text-2xl font-bold text-amber-900 mt-1" x-text="resources.filter(r=>r.capacity_role==='support').length"></div>
                             <div class="text-xs text-amber-500 mt-1" x-text="totalSupportFTE.toFixed(1) + ' FTE available'"></div>
                         </div>
                         <div class="card-raised bg-gradient-to-br from-emerald-50 to-teal-50 border-emerald-200">
-                            <div class="text-xs font-semibold text-emerald-600 uppercase tracking-wider">Avg Coverage</div>
+                            <div class="text-xs font-semibold text-emerald-600 uppercase tracking-wider flex items-center gap-1">Avg Coverage <span class="tip-icon" data-tip="Organization-wide lead coverage ratio. The single most important capacity metric.">?</span></div>
                             <div class="text-2xl font-bold mt-1" :class="overallCoverage >= 1 ? 'text-emerald-700' : overallCoverage >= 0.8 ? 'text-amber-700' : 'text-red-700'" x-text="overallCoverage.toFixed(2)"></div>
                             <div class="text-xs text-emerald-500 mt-1" x-text="teams.length + ' teams'"></div>
                         </div>
                         <div class="card-raised bg-gradient-to-br from-slate-50 to-gray-100 border-slate-200">
-                            <div class="text-xs font-semibold text-slate-600 uppercase tracking-wider">Total Cost</div>
+                            <div class="text-xs font-semibold text-slate-600 uppercase tracking-wider flex items-center gap-1">Total Cost <span class="tip-icon" data-tip="Sum of annual fully-loaded costs for all resources (salary + benefits + overhead).">?</span></div>
                             <div class="text-2xl font-bold text-slate-900 mt-1" x-text="'$' + (resources.reduce((s,r) => s + (r.annual_cost_usd||0), 0) / 1000000).toFixed(1) + 'M'"></div>
                             <div class="text-xs text-slate-500 mt-1">annual fully-loaded</div>
                         </div>
@@ -385,7 +396,7 @@
 
                     <div class="card-raised">
                         <table class="data-table">
-                            <thead><tr><th class="min-w-[180px]">Initiative</th><th>Status</th><th>Priority</th><th>Team</th><th>Lead&nbsp;FTE</th><th>Support&nbsp;FTE</th><th>Value</th><th>Readiness</th><th>Score</th><th></th></tr></thead>
+                            <thead><tr><th class="min-w-[180px]">Initiative</th><th>Status</th><th>Priority</th><th>Team</th><th>Lead&nbsp;FTE</th><th>Support&nbsp;FTE</th><th><span class="tip" data-tip="Business value score (0-100): stakeholder-assigned rating of strategic and financial value.">Value</span></th><th><span class="tip" data-tip="Readiness (0-100): how prepared to execute — requirements, funding, approvals.">Readiness</span></th><th><span class="tip" data-tip="Average of value + readiness. Used to prioritize constrained initiatives.">Score</span></th><th></th></tr></thead>
                             <tbody>
                                 <template x-for="i in filteredInitiatives" :key="i.id">
                                     <tr>
@@ -457,10 +468,10 @@
                     </div>
                 </div>
 
-                <!-- ========== AUGMENTATION ========== -->
-                <div x-show="currentView === 'augmentation'" x-transition>
+                <!-- ========== OFFSHORING & AUGMENTATION ========== -->
+                <div x-show="currentView === 'augmentation'" x-transition x-data="{augTab:'countries',riskSlider:50,selectedCountry:null}">
                     <div class="flex items-center justify-between mb-6">
-                        <div><h1 class="text-2xl font-bold text-gray-900">Resource Augmentation Planner</h1><p class="text-slate-500 text-sm mt-1">Model cost and capacity impact of staffing changes</p></div>
+                        <div><h1 class="text-2xl font-bold text-gray-900">Offshoring & Augmentation</h1><p class="text-slate-500 text-sm mt-1">Country intelligence, cost modeling, and staffing optimization</p></div>
                         <div class="flex gap-2">
                             <button @click="getAiAugmentation()" class="btn btn-ai" :disabled="aiAugLoading">
                                 <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9.813 15.904L9 18.75l-.813-2.846a4.5 4.5 0 00-3.09-3.09L2.25 12l2.846-.813a4.5 4.5 0 003.09-3.09L9 5.25l.813 2.846a4.5 4.5 0 003.09 3.09L15.75 12l-2.846.813a4.5 4.5 0 00-3.09 3.09z"/></svg>
@@ -469,14 +480,102 @@
                             <button @click="showRateModal = true; resetRateForm()" class="btn btn-primary">+ Add Rate</button>
                         </div>
                     </div>
+
+                    <!-- AI Result -->
                     <div x-show="aiAugResult" class="ai-card mb-6" x-transition>
                         <div class="flex items-center gap-2 mb-2"><svg class="w-4 h-4 text-indigo-300" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9.813 15.904L9 18.75l-.813-2.846a4.5 4.5 0 00-3.09-3.09L2.25 12l2.846-.813a4.5 4.5 0 003.09-3.09L9 5.25l.813 2.846a4.5 4.5 0 003.09 3.09L15.75 12l-2.846.813a4.5 4.5 0 00-3.09 3.09z"/></svg><span class="text-sm font-semibold">AI Staffing Optimization</span></div>
                         <div class="ai-response" x-html="renderMd(aiAugResult)"></div>
                     </div>
-                    <div class="card-raised">
-                        <h3 class="text-sm font-semibold text-slate-700 mb-4">Augmentation Rate Catalog</h3>
+
+                    <!-- Tabs -->
+                    <div class="flex gap-1 mb-0">
+                        <button @click="augTab='countries'" class="aug-tab" :class="augTab==='countries' ? 'active' : ''">Country Intelligence</button>
+                        <button @click="augTab='rates'" class="aug-tab" :class="augTab==='rates' ? 'active' : ''">Rate Catalog</button>
+                        <button @click="augTab='readiness'" class="aug-tab" :class="augTab==='readiness' ? 'active' : ''">Offshore Readiness</button>
+                        <button @click="augTab='transition'" class="aug-tab" :class="augTab==='transition' ? 'active' : ''">Transition Planning</button>
+                    </div>
+
+                    <!-- TAB 1: Country Intelligence -->
+                    <div x-show="augTab==='countries'" class="card-raised rounded-tl-none">
+                        <div class="flex items-center gap-2 mb-4">
+                            <h3 class="text-sm font-semibold text-slate-700">Global Offshore Destinations</h3>
+                            <span class="tip-icon" data-tip="8 countries with fully-loaded annual rates by role level (L1-L4), risk profiles, and fit scoring. Click a country for details.">?</span>
+                        </div>
+                        <div class="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-4 gap-3 mb-4">
+                            <template x-for="c in window.OFFSHORE.OFFSHORE_COUNTRIES" :key="c.id">
+                                <div class="bg-slate-50 rounded-lg p-4 border border-slate-200 cursor-pointer hover:border-indigo-300 hover:shadow-md transition-all" :class="selectedCountry?.id === c.id ? 'ring-2 ring-indigo-500 border-indigo-300' : ''" @click="selectedCountry = selectedCountry?.id === c.id ? null : c">
+                                    <div class="flex items-center gap-2 mb-2">
+                                        <span class="text-2xl" x-text="c.flag"></span>
+                                        <div>
+                                            <div class="font-semibold text-slate-900 text-sm" x-text="c.name"></div>
+                                            <div class="text-[10px] text-slate-400" x-text="c.region + ' · ' + c.tz + ' · ' + window.OFFSHORE.localTime(c.ianaZone)"></div>
+                                        </div>
+                                    </div>
+                                    <div class="grid grid-cols-4 gap-1 text-center text-[10px] mb-2">
+                                        <div class="bg-white rounded p-1"><div class="font-bold text-slate-800" x-text="'$' + (c.rates.L1/1000).toFixed(0) + 'k'"></div><div class="text-slate-400">L1</div></div>
+                                        <div class="bg-white rounded p-1"><div class="font-bold text-slate-800" x-text="'$' + (c.rates.L2/1000).toFixed(0) + 'k'"></div><div class="text-slate-400">L2</div></div>
+                                        <div class="bg-white rounded p-1"><div class="font-bold text-slate-800" x-text="'$' + (c.rates.L3/1000).toFixed(0) + 'k'"></div><div class="text-slate-400">L3</div></div>
+                                        <div class="bg-white rounded p-1"><div class="font-bold text-slate-800" x-text="'$' + (c.rates.L4/1000).toFixed(0) + 'k'"></div><div class="text-slate-400">L4</div></div>
+                                    </div>
+                                    <div class="text-[10px] text-emerald-600 font-semibold" x-text="'Save ' + Math.round((1 - c.rates.L2 / window.OFFSHORE.US_RATES.L2) * 100) + '% vs US (L2)'"></div>
+                                </div>
+                            </template>
+                        </div>
+                        <!-- Country Detail -->
+                        <div x-show="selectedCountry" class="bg-slate-50 rounded-lg p-5 border border-slate-200" x-transition>
+                            <div class="flex items-center gap-3 mb-4">
+                                <span class="text-3xl" x-text="selectedCountry?.flag"></span>
+                                <div>
+                                    <h4 class="text-lg font-bold text-slate-900" x-text="selectedCountry?.name"></h4>
+                                    <p class="text-xs text-slate-500" x-text="selectedCountry?.region + ' · ' + selectedCountry?.tz"></p>
+                                </div>
+                            </div>
+                            <div class="grid grid-cols-1 lg:grid-cols-3 gap-4">
+                                <!-- Risk Profile -->
+                                <div>
+                                    <h5 class="text-xs font-semibold text-slate-600 uppercase mb-2 flex items-center gap-1">Risk Profile <span class="tip-icon" data-tip="Scores 0-100 across 7 dimensions. Higher = better.">?</span></h5>
+                                    <div class="space-y-2">
+                                        <template x-for="[key, label] in [['talentPool','Talent Pool'],['english','English'],['infrastructure','Infrastructure'],['ipProtection','IP Protection'],['politicalStability','Stability'],['culturalAlignment','Culture Fit'],['timeZoneOverlap','TZ Overlap']]" :key="key">
+                                            <div>
+                                                <div class="flex justify-between text-[10px] mb-0.5"><span class="text-slate-500" x-text="label"></span><span class="font-semibold" x-text="selectedCountry?.risk[key]"></span></div>
+                                                <div class="risk-bar"><div class="risk-bar-fill" :class="selectedCountry?.risk[key] >= 70 ? 'bg-emerald-500' : selectedCountry?.risk[key] >= 50 ? 'bg-amber-400' : 'bg-red-400'" :style="`width:${selectedCountry?.risk[key]}%`"></div></div>
+                                            </div>
+                                        </template>
+                                    </div>
+                                </div>
+                                <!-- Strengths & Risks -->
+                                <div>
+                                    <h5 class="text-xs font-semibold text-emerald-600 uppercase mb-2">Strengths</h5>
+                                    <ul class="space-y-1 mb-3"><template x-for="s in selectedCountry?.strengths||[]" :key="s"><li class="text-xs text-slate-600 flex items-start gap-1"><span class="text-emerald-500 mt-0.5">+</span><span x-text="s"></span></li></template></ul>
+                                    <h5 class="text-xs font-semibold text-red-500 uppercase mb-2">Risks</h5>
+                                    <ul class="space-y-1"><template x-for="r in selectedCountry?.risks||[]" :key="r"><li class="text-xs text-slate-600 flex items-start gap-1"><span class="text-red-400 mt-0.5">-</span><span x-text="r"></span></li></template></ul>
+                                </div>
+                                <!-- Best For & Savings -->
+                                <div>
+                                    <h5 class="text-xs font-semibold text-indigo-600 uppercase mb-2">Best For</h5>
+                                    <div class="flex flex-wrap gap-1 mb-4"><template x-for="b in selectedCountry?.bestFor||[]" :key="b"><span class="badge badge-purple text-[10px]" x-text="b"></span></template></div>
+                                    <h5 class="text-xs font-semibold text-slate-600 uppercase mb-2 flex items-center gap-1">Savings vs US <span class="tip-icon" data-tip="Annual savings per FTE compared to US baseline rates at each level.">?</span></h5>
+                                    <div class="space-y-1">
+                                        <template x-for="lv in ['L1','L2','L3','L4']" :key="lv">
+                                            <div class="flex items-center gap-2 text-xs">
+                                                <span class="w-6 font-semibold text-slate-500" x-text="lv"></span>
+                                                <span class="text-slate-400" x-text="'$' + ((window.OFFSHORE.US_RATES[lv]||0)/1000).toFixed(0) + 'k'"></span>
+                                                <span class="text-slate-300">&rarr;</span>
+                                                <span class="font-semibold text-emerald-600" x-text="'$' + ((selectedCountry?.rates[lv]||0)/1000).toFixed(0) + 'k'"></span>
+                                                <span class="text-emerald-500 font-semibold" x-text="'(-' + Math.round((1 - (selectedCountry?.rates[lv]||0) / (window.OFFSHORE.US_RATES[lv]||1)) * 100) + '%)'"></span>
+                                            </div>
+                                        </template>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- TAB 2: Rate Catalog -->
+                    <div x-show="augTab==='rates'" class="card-raised rounded-tl-none">
+                        <h3 class="text-sm font-semibold text-slate-700 mb-4 flex items-center gap-1">Augmentation Rate Catalog <span class="tip-icon" data-tip="Configurable cost rates for external staffing. Daily rate is fully-loaded (salary + benefits + overhead + vendor margin). Annual = daily x 260 days.">?</span></h3>
                         <table class="data-table">
-                            <thead><tr><th>Name</th><th>Region</th><th>Type</th><th>Role</th><th>Daily Rate</th><th>Annual Rate</th><th>Ramp</th><th></th></tr></thead>
+                            <thead><tr><th>Name</th><th>Region</th><th>Type</th><th>Role</th><th>Daily&nbsp;Rate <span class="tip-icon" data-tip="Fully-loaded daily cost including all overhead.">?</span></th><th>Annual&nbsp;Rate</th><th>Ramp <span class="tip-icon" data-tip="Weeks before resource reaches full productivity. Budget ~50% output during ramp.">?</span></th><th></th></tr></thead>
                             <tbody>
                                 <template x-for="r in augRates" :key="r.id">
                                     <tr>
@@ -492,6 +591,109 @@
                                 </template>
                             </tbody>
                         </table>
+                    </div>
+
+                    <!-- TAB 3: Offshore Readiness -->
+                    <div x-show="augTab==='readiness'" class="card-raised rounded-tl-none">
+                        <div class="flex items-center justify-between mb-4">
+                            <h3 class="text-sm font-semibold text-slate-700 flex items-center gap-1">Offshore Readiness Analyzer <span class="tip-icon" data-tip="Maps your resources to role levels (L1-L4) and recommends offshore eligibility. L1/L2 = generally offshorable. L3/L4 = retain.">?</span></h3>
+                        </div>
+                        <!-- Cost-Risk Slider -->
+                        <div class="bg-slate-50 rounded-lg p-4 border border-slate-200 mb-4">
+                            <div class="flex items-center justify-between mb-2">
+                                <span class="text-xs font-semibold text-emerald-600">Max Quality</span>
+                                <span class="text-xs font-semibold text-slate-500 flex items-center gap-1">Cost-to-Risk Slider <span class="tip-icon" data-tip="Slide left to retain more roles onshore (conservative). Slide right to offshore more aggressively for savings.">?</span></span>
+                                <span class="text-xs font-semibold text-amber-600">Max Savings</span>
+                            </div>
+                            <input type="range" x-model.number="riskSlider" min="0" max="100" class="w-full accent-indigo-600">
+                            <div class="text-center text-xs text-slate-400 mt-1" x-text="riskSlider <= 40 ? 'Conservative — retaining more onshore' : riskSlider >= 60 ? 'Aggressive — pushing more offshore' : 'Balanced — default recommendations'"></div>
+                        </div>
+                        <!-- Resource Analysis -->
+                        <div class="grid grid-cols-3 gap-3 mb-4">
+                            <div class="bg-emerald-50 rounded-lg p-3 text-center border border-emerald-200">
+                                <div class="text-2xl font-bold text-emerald-700" x-text="resources.filter(r => { const lv = r.title?.includes('VP') || r.title?.includes('Director') ? 'L4' : r.title?.includes('Sr.') || r.title?.includes('Senior') || r.title?.includes('Manager') || r.title?.includes('Lead') || r.title?.includes('Architect') ? 'L3' : r.capacity_role === 'lead' ? 'L3' : r.title?.includes('Engineer') || r.title?.includes('Analyst') ? 'L2' : 'L1'; const rec = window.OFFSHORE.getSliderRec(lv === 'L1' || lv === 'L2' ? 'Y' : 'N', lv, r.title, riskSlider); return rec === 'Y'; }).length"></div>
+                                <div class="text-xs text-emerald-600">Offshore (Y)</div>
+                            </div>
+                            <div class="bg-amber-50 rounded-lg p-3 text-center border border-amber-200">
+                                <div class="text-2xl font-bold text-amber-700" x-text="resources.filter(r => { const lv = r.title?.includes('VP') || r.title?.includes('Director') ? 'L4' : r.title?.includes('Sr.') || r.title?.includes('Senior') || r.title?.includes('Manager') || r.title?.includes('Lead') || r.title?.includes('Architect') ? 'L3' : r.capacity_role === 'lead' ? 'L3' : r.title?.includes('Engineer') || r.title?.includes('Analyst') ? 'L2' : 'L1'; const rec = window.OFFSHORE.getSliderRec(lv === 'L1' || lv === 'L2' ? 'Y' : 'N', lv, r.title, riskSlider); return rec === 'P'; }).length"></div>
+                                <div class="text-xs text-amber-600">Partial (P)</div>
+                            </div>
+                            <div class="bg-blue-50 rounded-lg p-3 text-center border border-blue-200">
+                                <div class="text-2xl font-bold text-blue-700" x-text="resources.filter(r => { const lv = r.title?.includes('VP') || r.title?.includes('Director') ? 'L4' : r.title?.includes('Sr.') || r.title?.includes('Senior') || r.title?.includes('Manager') || r.title?.includes('Lead') || r.title?.includes('Architect') ? 'L3' : r.capacity_role === 'lead' ? 'L3' : r.title?.includes('Engineer') || r.title?.includes('Analyst') ? 'L2' : 'L1'; const rec = window.OFFSHORE.getSliderRec(lv === 'L1' || lv === 'L2' ? 'Y' : 'N', lv, r.title, riskSlider); return rec === 'N'; }).length"></div>
+                                <div class="text-xs text-blue-600">Retain (N)</div>
+                            </div>
+                        </div>
+                        <table class="data-table">
+                            <thead><tr><th>Resource</th><th>Team</th><th>Level</th><th>Current Cost</th><th>Recommendation</th><th>Potential Savings</th></tr></thead>
+                            <tbody>
+                                <template x-for="r in resources" :key="r.id">
+                                    <tr x-data="{
+                                        get level() { return r.title?.includes('VP') || r.title?.includes('Director') ? 'L4' : r.title?.includes('Sr.') || r.title?.includes('Senior') || r.title?.includes('Manager') || r.title?.includes('Lead') || r.title?.includes('Architect') ? 'L3' : r.capacity_role === 'lead' ? 'L3' : r.title?.includes('Engineer') || r.title?.includes('Analyst') ? 'L2' : 'L1' },
+                                        get baseRec() { return this.level === 'L1' || this.level === 'L2' ? 'Y' : 'N' },
+                                        get rec() { return window.OFFSHORE.getSliderRec(this.baseRec, this.level, r.title, riskSlider) },
+                                        get savings() { const us = window.OFFSHORE.US_RATES[this.level]; const off = window.OFFSHORE.OFFSHORE_COUNTRIES[0].rates[this.level]; return this.rec === 'Y' ? Math.round((us - off) * r.fte_equivalent) : this.rec === 'P' ? Math.round((us - off) * r.fte_equivalent * 0.5) : 0; }
+                                    }">
+                                        <td class="font-medium text-slate-900" x-text="r.full_name"></td>
+                                        <td class="text-xs text-slate-500" x-text="teamName(r.team_id)"></td>
+                                        <td><span class="badge badge-blue text-[10px]" x-text="level"></span></td>
+                                        <td class="text-xs" x-text="r.annual_cost_usd ? '$' + Number(r.annual_cost_usd).toLocaleString() : '—'"></td>
+                                        <td><span class="badge" :class="rec === 'Y' ? 'badge-green' : rec === 'P' ? 'badge-amber' : 'badge-blue'" x-text="rec === 'Y' ? 'Offshore' : rec === 'P' ? 'Partial' : 'Retain'"></span></td>
+                                        <td class="text-emerald-600 font-semibold text-xs" x-text="savings > 0 ? '$' + savings.toLocaleString() + '/yr' : '—'"></td>
+                                    </tr>
+                                </template>
+                            </tbody>
+                        </table>
+                    </div>
+
+                    <!-- TAB 4: Transition Planning -->
+                    <div x-show="augTab==='transition'" class="card-raised rounded-tl-none">
+                        <h3 class="text-sm font-semibold text-slate-700 mb-4">Transition Planning & Governance</h3>
+                        <div class="grid grid-cols-1 lg:grid-cols-2 gap-6">
+                            <!-- Management Ratios -->
+                            <div>
+                                <h4 class="text-xs font-semibold text-slate-600 uppercase mb-3 flex items-center gap-1">Management Ratios <span class="tip-icon" data-tip="Rule of thumb: 1 onshore manager per 8-12 offshore FTEs. Budget 15-20% above quoted rates for friction costs.">?</span></h4>
+                                <table class="data-table text-xs">
+                                    <thead><tr><th>Offshore Team</th><th>Onshore Needed</th><th>Roles</th></tr></thead>
+                                    <tbody>
+                                        <template x-for="r in window.OFFSHORE.MGMT_RATIOS" :key="r.min">
+                                            <tr>
+                                                <td class="font-semibold" x-text="r.min + '-' + (r.max > 999 ? '∞' : r.max) + ' FTE'"></td>
+                                                <td x-text="r.onshore + ' FTE'"></td>
+                                                <td class="text-slate-500" x-text="r.roles"></td>
+                                            </tr>
+                                        </template>
+                                    </tbody>
+                                </table>
+                            </div>
+                            <!-- Providers -->
+                            <div>
+                                <h4 class="text-xs font-semibold text-slate-600 uppercase mb-3">Service Providers by Tier</h4>
+                                <div class="space-y-3">
+                                    <div>
+                                        <div class="text-[10px] font-semibold text-indigo-600 uppercase mb-1">Tier 1 — Global System Integrators ($10M+/yr)</div>
+                                        <div class="flex flex-wrap gap-1"><template x-for="p in window.OFFSHORE.PROVIDERS.tier1" :key="p.name"><span class="badge bg-indigo-50 text-indigo-700 text-[10px]" :title="p.strength" x-text="p.name"></span></template></div>
+                                    </div>
+                                    <div>
+                                        <div class="text-[10px] font-semibold text-emerald-600 uppercase mb-1">Tier 2 — Specialized ($1-10M/yr)</div>
+                                        <div class="flex flex-wrap gap-1"><template x-for="p in window.OFFSHORE.PROVIDERS.tier2" :key="p.name"><span class="badge bg-emerald-50 text-emerald-700 text-[10px]" :title="p.strength" x-text="p.name"></span></template></div>
+                                    </div>
+                                    <div>
+                                        <div class="text-[10px] font-semibold text-amber-600 uppercase mb-1">Tier 3 — Boutique/Staff Aug ($500K-5M/yr)</div>
+                                        <div class="flex flex-wrap gap-1"><template x-for="p in window.OFFSHORE.PROVIDERS.tier3" :key="p.name"><span class="badge bg-amber-50 text-amber-700 text-[10px]" :title="p.strength" x-text="p.name"></span></template></div>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                        <!-- Transition Timeline -->
+                        <div class="mt-6 bg-slate-50 rounded-lg p-4 border border-slate-200">
+                            <h4 class="text-xs font-semibold text-slate-600 uppercase mb-3">4-Phase Transition Timeline</h4>
+                            <div class="grid grid-cols-4 gap-3">
+                                <div class="text-center"><div class="w-8 h-8 rounded-full bg-indigo-100 text-indigo-700 flex items-center justify-center font-bold text-xs mx-auto mb-1">1</div><div class="text-xs font-semibold text-slate-700">Pre-Announce</div><div class="text-[10px] text-slate-500">Weeks -4 to -1: Brief HR/Legal, prep retention packages, identify redeployment</div></div>
+                                <div class="text-center"><div class="w-8 h-8 rounded-full bg-amber-100 text-amber-700 flex items-center justify-center font-bold text-xs mx-auto mb-1">2</div><div class="text-xs font-semibold text-slate-700">Announce</div><div class="text-[10px] text-slate-500">Day 0: CEO/SVP comms, all-hands, manager talking points, HR/EAP ready</div></div>
+                                <div class="text-center"><div class="w-8 h-8 rounded-full bg-emerald-100 text-emerald-700 flex items-center justify-center font-bold text-xs mx-auto mb-1">3</div><div class="text-xs font-semibold text-slate-700">Transition</div><div class="text-[10px] text-slate-500">Weeks 1-12: KT assignments, retention bonuses, weekly check-ins, parallel run</div></div>
+                                <div class="text-center"><div class="w-8 h-8 rounded-full bg-blue-100 text-blue-700 flex items-center justify-center font-bold text-xs mx-auto mb-1">4</div><div class="text-xs font-semibold text-slate-700">Post-Transition</div><div class="text-[10px] text-slate-500">Months 3-6: Redefine roles, monitor engagement, address survivor guilt</div></div>
+                            </div>
+                        </div>
                     </div>
                 </div>
 
